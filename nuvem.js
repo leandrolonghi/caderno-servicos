@@ -148,19 +148,19 @@ window.Nuvem = {
   async signUp(email, password) { const { data, error } = await sb.auth.signUp({ email, password }); if (error) throw msg(error); if (!data.session) throw 'Conta criada. Abra o link de confirmação que chegou no seu e-mail e depois toque em Entrar.'; setUser(data.user); },
   async signOut() { try { await sb.auth.signOut(); } catch {} setUser(null); },
   /* acesso do cliente ao portal (precisa de internet) */
-  async acesso(clienteId) {
+  async acessos(clienteId) {
     if (!sb || !user) throw 'sem_login';
-    const { data, error } = await sb.from('portal_acesso').select('login,trocar').eq('cliente_id', clienteId).maybeSingle();
+    const { data, error } = await sb.from('portal_acesso').select('id,login,trocar').eq('cliente_id', clienteId).order('login');
     if (error) throw error; return data;
   },
-  async definirAcesso(clienteId, login, senha) {
+  async definirAcesso(clienteId, login, senha, id) {
     if (!sb || !user) throw 'Entre na sua conta';
-    const { data, error } = await sb.rpc('portal_definir_acesso', { p_cliente: clienteId, p_login: login, p_senha: senha });
+    const { data, error } = await sb.rpc('portal_definir_acesso', { p_cliente: clienteId, p_login: login, p_senha: senha, p_id: id || null });
     if (error) throw /fetch|network/i.test(error.message) ? 'Sem conexão. Tente de novo quando tiver sinal.' : error.message; return data;
   },
-  async removerAcesso(clienteId) {
+  async removerAcesso(id) {
     if (!sb || !user) throw 'Entre na sua conta';
-    const { error } = await sb.rpc('portal_remover_acesso', { p_cliente: clienteId });
+    const { error } = await sb.rpc('portal_remover_acesso', { p_id: id });
     if (error) throw error.message;
   }
 };

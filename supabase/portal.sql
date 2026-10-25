@@ -1,12 +1,13 @@
 -- Portal do cliente: cole tudo no Supabase em SQL Editor > New query e clique em Run.
 -- (Pode rodar de novo sempre que este arquivo mudar.)
--- O cliente entra com usuário e senha que você cria no app e vê só as OS dele:
+-- O cliente entra com e-mail e senha (cada cliente pode ter vários logins) e vê só as OS dele:
 -- a que está em andamento e o histórico. Aparecem situação, datas, máquina, falha,
 -- causa, solução, testes, cuidados, fotos e horários.
 -- O valor total aparece só depois que a OS está finalizada.
 -- Valores por item, materiais, CPF, telefone e assinatura não aparecem.
 -- As senhas ficam guardadas embaralhadas (bcrypt): nem você consegue ler depois.
 -- A senha que você cria é provisória: no primeiro acesso o cliente cria a senha dele.
+-- A sessão termina ao fechar a aba do portal (e vence sozinha depois de 30 minutos sem uso).
 
 create extension if not exists pgcrypto with schema extensions;
 
@@ -35,86 +36,132 @@ language sql immutable as $$
   2);
 $$;
 
--- Acessos ao portal: um por cliente. O token é a "sessão" guardada no aparelho do cliente;
--- trocar a senha ou remover o acesso gera outro token e desconecta os aparelhos.
+-- Logins do portal: cada cliente pode ter vários (um por e-mail).
+-- A versão anterior (um login por cliente, com o token na mesma tabela) é trocada uma única vez;
+-- os acessos criados nela precisam ser criados de novo no app.
+do $$ begin
+  if exists (select 1 from information_schema.columns
+             where table_schema = 'public' and table_name = 'portal_acesso' and column_name = 'token') then
+    drop table public.portal_acesso cascade;
+  end if;
+end $$;
+drop function if exists public.portal_definir_acesso(text, text, text);
+drop function if exists public.portal_remover_acesso(text);
+drop function if exists public.portal_cliente(text);
+
 create table if not exists public.portal_acesso (
+  id uuid primary key default gen_random_uuid(),
   owner uuid not null default auth.uid() references auth.users(id) on delete cascade,
   cliente_id text not null,
-  login text not null unique,
-  senha text not null,
-  token text not null unique,
-  criado_em timestamptz not null default now(),
-  primary key (owner, cliente_id)
+  login text not null unique,           -- e-mail em minúsculas
+  senha text not null,                  -- bcrypt
+  trocar boolean not null default true, -- true = senha provisória; o portal pede uma senha nova
+  criado_em timestamptz not null default now()
 );
--- true = senha provisória (criada ou resetada no app); o portal pede uma senha nova
-alter table public.portal_acesso add column if not exists trocar boolean not null default true;
+create index if not exists portal_acesso_cliente on public.portal_acesso (owner, cliente_id);
 alter table public.portal_acesso enable row level security;
 revoke all on public.portal_acesso from anon, authenticated;
--- o app só lê quem tem acesso (sem senha nem token); criar e remover passa pelas funções abaixo
-grant select (owner, cliente_id, login, criado_em, trocar) on public.portal_acesso to authenticated;
+-- o app só lê os logins (sem senha); criar, resetar e remover passa pelas funções abaixo
+grant select (id, owner, cliente_id, login, criado_em, trocar) on public.portal_acesso to authenticated;
 drop policy if exists "acessos do dono" on public.portal_acesso;
 create policy "acessos do dono" on public.portal_acesso for select to authenticated using (owner = auth.uid());
 
--- Usuário = só os números (telefone ou CPF/CNPJ) ou o texto em minúsculas
-create or replace function public.portal_login_norm(p text) returns text
-language sql immutable as $$
-  select case when regexp_replace(coalesce(p, ''), '[0-9 ()./+-]', '', 'g') = ''
-              then regexp_replace(coalesce(p, ''), '[^0-9]', '', 'g') else lower(trim(p)) end;
+-- Sessões abertas no portal. A página guarda o token só enquanto a aba está aberta;
+-- no servidor a sessão vence depois de 30 minutos sem uso (a página aberta renova a cada minuto).
+create table if not exists public.portal_sessao (
+  token text primary key,
+  acesso_id uuid not null references public.portal_acesso(id) on delete cascade,
+  visto timestamptz not null default now()
+);
+alter table public.portal_sessao enable row level security;
+revoke all on public.portal_sessao from anon, authenticated;
+
+create or replace function public.portal_novo_token() returns text
+language sql volatile set search_path = public, extensions as $$
+  select translate(encode(gen_random_bytes(24), 'base64'), '+/', '-_');
 $$;
 
--- App: cria o acesso ou reseta a senha (vira provisória de novo)
-create or replace function public.portal_definir_acesso(p_cliente text, p_login text, p_senha text) returns text
+-- Devolve o login da sessão (e renova o prazo); nulo se venceu ou não existe
+create or replace function public.portal_sessao_acesso(p_token text) returns uuid
+language plpgsql volatile security definer set search_path = public as $$
+declare a uuid;
+begin
+  update portal_sessao set visto = now()
+   where token = p_token and visto > now() - interval '30 minutes'
+   returning acesso_id into a;
+  return a;
+end $$;
+
+-- App: cria um login (p_id nulo) ou troca o e-mail e reseta a senha de um login existente
+create or replace function public.portal_definir_acesso(p_cliente text, p_login text, p_senha text, p_id uuid default null) returns uuid
 language plpgsql security definer set search_path = public, extensions as $$
-declare l text := public.portal_login_norm(p_login);
+declare l text := lower(trim(coalesce(p_login, ''))); r uuid;
 begin
   if auth.uid() is null then raise exception 'Entre na sua conta'; end if;
-  if length(l) < 3 then raise exception 'Usuário muito curto'; end if;
+  if l !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then raise exception 'Digite um e-mail válido'; end if;
   if length(coalesce(p_senha, '')) < 6 then raise exception 'A senha precisa ter pelo menos 6 caracteres'; end if;
   if not exists (select 1 from docs where owner = auth.uid() and col = 'clientes' and id = p_cliente and not deleted) then
     raise exception 'Cliente não encontrado. Espere o app enviar os dados e tente de novo.';
   end if;
-  if exists (select 1 from portal_acesso where login = l and not (owner = auth.uid() and cliente_id = p_cliente)) then
-    raise exception 'Esse usuário já é de outro cliente';
+  if exists (select 1 from portal_acesso where login = l and id is distinct from p_id) then
+    raise exception 'Esse e-mail já tem login no portal';
   end if;
-  insert into portal_acesso (owner, cliente_id, login, senha, token)
-  values (auth.uid(), p_cliente, l, crypt(p_senha, gen_salt('bf')), translate(encode(gen_random_bytes(24), 'base64'), '+/', '-_'))
-  on conflict (owner, cliente_id) do update
-    set login = excluded.login, senha = excluded.senha, token = excluded.token, trocar = true;
-  return l;
+  if p_id is null then
+    insert into portal_acesso (owner, cliente_id, login, senha) values (auth.uid(), p_cliente, l, crypt(p_senha, gen_salt('bf')))
+    returning id into r;
+  else
+    update portal_acesso set login = l, senha = crypt(p_senha, gen_salt('bf')), trocar = true
+     where id = p_id and owner = auth.uid() and cliente_id = p_cliente returning id into r;
+    if r is null then raise exception 'Login não encontrado'; end if;
+    delete from portal_sessao where acesso_id = r;  -- desconecta quem estava dentro
+  end if;
+  return r;
 end $$;
 
--- App: remove o acesso (o cliente não entra mais)
-create or replace function public.portal_remover_acesso(p_cliente text) returns void
+-- App: remove um login (quem estava dentro sai)
+create or replace function public.portal_remover_acesso(p_id uuid) returns void
 language sql security definer set search_path = public as $$
-  delete from portal_acesso where owner = auth.uid() and cliente_id = p_cliente;
+  delete from portal_acesso where id = p_id and owner = auth.uid();
 $$;
 
--- Portal: confere usuário e senha e devolve o token da sessão
+-- Portal: confere e-mail e senha e abre uma sessão
 create or replace function public.portal_entrar(p_login text, p_senha text) returns text
 language plpgsql security definer set search_path = public, extensions as $$
-declare t text;
+declare a uuid; t text;
 begin
-  select token into t from portal_acesso
-   where login = public.portal_login_norm(p_login) and senha = crypt(coalesce(p_senha, ''), senha);
-  if t is null then perform pg_sleep(1); end if;  -- atrasa quem tenta adivinhar senhas
+  delete from portal_sessao where visto < now() - interval '30 minutes';
+  select id into a from portal_acesso
+   where login = lower(trim(coalesce(p_login, ''))) and senha = crypt(coalesce(p_senha, ''), senha);
+  if a is null then perform pg_sleep(1); return null; end if;  -- atrasa quem tenta adivinhar senhas
+  t := portal_novo_token();
+  insert into portal_sessao (token, acesso_id) values (t, a);
   return t;
 end $$;
 
--- Portal: o cliente troca a senha provisória pela dele; devolve um token novo
--- (os outros aparelhos que entraram com a senha antiga saem)
+-- Portal: encerra a sessão (botão Sair)
+create or replace function public.portal_sair(p_token text) returns void
+language sql security definer set search_path = public as $$
+  delete from portal_sessao where token = p_token;
+$$;
+
+-- Portal: o cliente troca a senha provisória pela dele (as outras sessões desse login saem)
 create or replace function public.portal_nova_senha(p_token text, p_senha text) returns text
 language plpgsql security definer set search_path = public, extensions as $$
-declare t text := translate(encode(gen_random_bytes(24), 'base64'), '+/', '-_');
+declare a uuid := public.portal_sessao_acesso(p_token);
 begin
+  if a is null then return null; end if;
   if length(coalesce(p_senha, '')) < 6 then raise exception 'A senha precisa ter pelo menos 6 caracteres'; end if;
-  update portal_acesso set senha = crypt(p_senha, gen_salt('bf')), token = t, trocar = false where token = p_token;
-  if not found then return null; end if;
-  return t;
+  update portal_acesso set senha = crypt(p_senha, gen_salt('bf')), trocar = false where id = a;
+  delete from portal_sessao where acesso_id = a and token <> p_token;
+  return p_token;
 end $$;
 
 create or replace function public.portal_cliente(p_token text) returns jsonb
-language sql stable security definer set search_path = public as $$
-  select jsonb_build_object(
+language plpgsql volatile security definer set search_path = public as $$
+declare a uuid := public.portal_sessao_acesso(p_token);
+begin
+  if a is null then return null; end if;
+  return (select jsonb_build_object(
     'cliente', c.data->'nome', 'fazenda', c.data->'fazenda',
     'empresa', g.data->'nome', 'telefone', g.data->'telefone',
     'pasta', c.owner, 'trocarSenha', pa.trocar,
@@ -138,11 +185,10 @@ language sql stable security definer set search_path = public as $$
   from public.portal_acesso pa
   join public.docs c on c.owner = pa.owner and c.col = 'clientes' and c.id = pa.cliente_id and not c.deleted
   left join public.docs g on g.owner = c.owner and g.col = 'config' and g.id = 'geral'
-  where pa.token = p_token
-  limit 1;
-$$;
+  where pa.id = a);
+end $$;
 
--- Fotos: o portal só consegue abrir as fotos de falha, testes e serviço das OS de clientes com link
+-- Fotos: o portal só consegue abrir as fotos de falha, testes e serviço das OS de clientes com login
 create or replace function public.portal_foto(p_name text) returns boolean
 language sql stable security definer set search_path = public as $$
   select exists (
@@ -155,18 +201,22 @@ language sql stable security definer set search_path = public as $$
   );
 $$;
 
+revoke all on function public.portal_novo_token() from public;
+revoke all on function public.portal_sessao_acesso(text) from public;
 revoke all on function public.portal_cliente(text) from public;
 revoke all on function public.portal_entrar(text, text) from public;
+revoke all on function public.portal_sair(text) from public;
 revoke all on function public.portal_nova_senha(text, text) from public;
-grant execute on function public.portal_nova_senha(text, text) to anon, authenticated;
-revoke all on function public.portal_definir_acesso(text, text, text) from public;
-revoke all on function public.portal_remover_acesso(text) from public;
-grant execute on function public.portal_entrar(text, text) to anon, authenticated;
-grant execute on function public.portal_definir_acesso(text, text, text) to authenticated;
-grant execute on function public.portal_remover_acesso(text) to authenticated;
+revoke all on function public.portal_definir_acesso(text, text, text, uuid) from public;
+revoke all on function public.portal_remover_acesso(uuid) from public;
 revoke all on function public.portal_foto(text) from public;
 grant execute on function public.portal_cliente(text) to anon, authenticated;
+grant execute on function public.portal_entrar(text, text) to anon, authenticated;
+grant execute on function public.portal_sair(text) to anon, authenticated;
+grant execute on function public.portal_nova_senha(text, text) to anon, authenticated;
 grant execute on function public.portal_foto(text) to anon, authenticated;
+grant execute on function public.portal_definir_acesso(text, text, text, uuid) to authenticated;
+grant execute on function public.portal_remover_acesso(uuid) to authenticated;
 
 drop policy if exists "fotos do portal" on storage.objects;
 create policy "fotos do portal" on storage.objects for select to anon
