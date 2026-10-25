@@ -1,4 +1,4 @@
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Acompanhar OS</title><meta name="robots" content="noindex"><meta name="referrer" content="no-referrer"><meta name="theme-color" content="#1D211C"><link rel="icon" href="../icons/favicon-64.png">
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Minhas OS</title><meta name="robots" content="noindex"><meta name="referrer" content="no-referrer"><meta name="theme-color" content="#1D211C"><link rel="icon" href="../icons/favicon-64.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&display=swap">
 <style>
@@ -45,14 +45,20 @@ p{margin:0;white-space:pre-wrap}
 .btn{display:inline-block;font:600 16px var(--body);text-decoration:none;color:#000;background:var(--brand);border-radius:10px;padding:10px 16px}
 .empty{text-align:center;padding:48px 0}
 footer{font-size:13px;color:var(--muted)}
+.cards{display:flex;flex-direction:column;gap:10px}
+.card{display:flex;flex-direction:column;gap:4px;background:var(--surface);border-radius:12px;padding:12px 14px;color:inherit;text-decoration:none;min-width:0}
+.cardtop{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.clip{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st.sm{font-size:14px;margin-top:2px}.st.sm::before{width:9px;height:9px}
+.voltar{color:var(--muted);text-decoration:none;font-weight:600;font-size:15px;margin-bottom:-10px}
 </style></head><body>
-<header><div class="wrap"><img src="../icons/icon-192.png" alt=""><b id="empresa">Acompanhar OS</b></div></header>
+<header><div class="wrap"><img src="../icons/icon-192.png" alt=""><b id="empresa">Minhas OS</b></div></header>
 <main><div class="wrap" id="out"><p class="empty muted">Carregando…</p></div></main>
 <script src="../config.js"></script>
 <script>
 (() => {
 const C = window.CADERNO_CONFIG || {}, out = document.getElementById('out');
-const token = location.hash.slice(1) || new URLSearchParams(location.search).get('os') || '';
+const token = location.hash.slice(1).split('/')[0];
 const H = { apikey: C.supabaseKey, Authorization: 'Bearer ' + C.supabaseKey };
 const STATUS = { aberto: 'Agendado', deslocamento: 'Técnico a caminho', aguardando: 'Técnico no local', andamento: 'Em atendimento', pausada: 'Pausada', concluido: 'Finalizada', faturado: 'Finalizada' };
 const COR = { aberto: 'var(--warn)', deslocamento: 'var(--info)', aguardando: 'var(--info)', andamento: 'var(--info)', pausada: 'var(--warn)', concluido: 'var(--ok)', faturado: 'var(--ok)' };
@@ -82,52 +88,82 @@ function foto(id) {
 const fotos = ids => { const l = (ids || []).filter(i => /^sb-/.test(i)); return l.length ? el('div', { class: 'fotos' }, l.map(foto)) : null; };
 const bloco = (titulo, txt, ids) => (txt || (ids || []).some(i => /^sb-/.test(i))) ? el('section', {}, el('h2', {}, titulo), txt ? el('p', {}, txt) : null, fotos(ids)) : null;
 
-function render(o) {
-  pasta = o.pasta;
-  document.getElementById('empresa').textContent = o.empresa || 'Acompanhar OS';
-  const os = o.numero ? 'OS ' + String(o.numero).padStart(4, '0') : 'Ordem de serviço';
-  document.title = `${os} · ${o.empresa || 'Acompanhar OS'}`;
+const osNome = o => o.numero ? 'OS ' + String(o.numero).padStart(4, '0') : 'Ordem de serviço';
+const ativa = o => !['concluido', 'faturado'].includes(o.status);
+const pausaDe = o => o.status === 'pausada' ? [...(o.apontamentos || [])].sort((a, b) => b.ini - a.ini).find(x => x.tipo === 'pausa' && !x.fim) : null;
+const stTxt = o => { const l = STATUS[o.status] || o.status || '', p = pausaDe(o); return p?.motivo ? `${l}: ${p.motivo}` : l; };
+const zap = (tel, msg) => { const t = String(tel || '').replace(/\D/g, ''); return t ? el('section', {}, el('a', { class: 'btn', href: `https://wa.me/${t.length <= 11 ? '55' + t : t}?text=${encodeURIComponent(msg)}`, target: '_blank', rel: 'noopener' }, 'Falar no WhatsApp')) : null; };
+
+function cartao(o) {
+  return el('a', { class: 'card', href: `#${token}/${encodeURIComponent(o.id)}` },
+    el('div', { class: 'cardtop' }, el('b', {}, osNome(o)), el('span', { class: 'muted small' }, fmtDate(o.data))),
+    o.maquina && el('div', { class: 'small' }, o.maquina),
+    o.falha && el('div', { class: 'small muted clip' }, o.falha),
+    el('span', { class: 'st sm', style: `--c:${COR[o.status] || 'var(--muted)'}` }, stTxt(o)));
+}
+
+function lista(d) {
+  document.title = d.empresa || 'Minhas OS';
+  const abertas = d.os.filter(ativa), antigas = d.os.filter(o => !ativa(o));
+  out.replaceChildren(...[
+    el('section', {}, el('div', { class: 'muted small' }, 'Ordens de serviço'), el('h1', {}, [d.cliente, d.fazenda].filter(Boolean).join(' · '))),
+    abertas.length ? el('section', {}, el('h2', {}, 'Em andamento'), el('div', { class: 'cards' }, abertas.map(cartao))) : null,
+    antigas.length ? el('section', {}, el('h2', {}, 'Histórico'), el('div', { class: 'cards' }, antigas.map(cartao))) : null,
+    !d.os.length ? el('p', { class: 'muted' }, 'Nenhuma ordem de serviço ainda.') : null,
+    zap(d.telefone, 'Olá'),
+    el('footer', {}, 'Esta página se atualiza sozinha.')].filter(Boolean));
+}
+
+function detalhe(d, o) {
+  const os = osNome(o);
+  document.title = `${os} · ${d.empresa || 'Minhas OS'}`;
   const ap = (o.apontamentos || []).filter(x => x.ini).sort((a, b) => a.ini - b.ini);
-  const pausa = o.status === 'pausada' ? [...ap].reverse().find(x => x.tipo === 'pausa' && !x.fim) : null;
   const passo = PASSO[o.status] || 1, cor = COR[o.status] || 'var(--muted)';
-  const lbl = STATUS[o.status] || o.status || '';
-  const tel = String(o.telefone || '').replace(/\D/g, '');
   const testes = (o.testes || []).filter(t => t.desc || (t.fotos || []).length);
   out.replaceChildren(...[
+    el('a', { class: 'voltar', href: '#' + token }, '‹ Minhas OS'),
     el('section', {},
       el('div', { class: 'muted small' }, [o.tipo, fmtDate(o.data)].filter(Boolean).join(' · ')),
       el('h1', {}, os),
-      el('div', { style: 'margin-top:10px' }, el('span', { class: 'st', style: `--c:${cor}` }, pausa?.motivo ? `${lbl}: ${pausa.motivo}` : lbl)),
+      el('div', { style: 'margin-top:10px' }, el('span', { class: 'st', style: `--c:${cor}` }, stTxt(o))),
       el('div', { class: 'steps', style: `--c:${cor}` }, [1, 2, 3, 4].map(i => el('div', { class: i <= passo ? 'on' : '' }))),
       el('div', { class: 'steplbl' }, el('span', {}, 'Agendado'), el('span', {}, 'A caminho'), el('span', {}, 'Atendimento'), el('span', {}, 'Finalizada'))),
-    el('section', {}, el('dl', { class: 'info', style: 'margin:0' },
-      o.cliente && [el('dt', {}, 'Cliente'), el('dd', {}, [o.cliente, o.fazenda].filter(Boolean).join(' · '))],
-      o.maquina && [el('dt', {}, 'Máquina'), el('dd', {}, o.maquina + (o.serie ? ` · série ${o.serie}` : ''))])),
+    o.maquina ? el('section', {}, el('dl', { class: 'info', style: 'margin:0' }, el('dt', {}, 'Máquina'), el('dd', {}, o.maquina + (o.serie ? ` · série ${o.serie}` : '')))) : null,
     bloco('Falha', o.falha, o.fotosFalha),
     bloco('Causa', o.causa),
     bloco('Solução', o.solucao),
     testes.length ? el('section', {}, el('h2', {}, 'Testes realizados'), testes.map(t => el('div', { class: 'teste' }, t.desc ? el('p', {}, t.desc) : null, fotos(t.fotos)))) : null,
     bloco('Fotos do serviço', '', o.fotos),
     bloco('Cuidados', o.cuidados),
-    ap.length ? el('section', {}, el('h2', {}, 'Histórico'), el('div', { class: 'hist' },
+    ap.length ? el('section', {}, el('h2', {}, 'Horários'), el('div', { class: 'hist' },
       ap.map(x => el('div', {}, el('span', {}, x.tipo === 'pausa' ? `Pausado${x.motivo ? ': ' + x.motivo : ''}` : TIPO[x.tipo] || x.tipo), el('span', {}, x.tipo === 'pausa' ? quando(x.ini) : periodo(x)))))) : null,
     o.assinadoEm ? el('p', { class: 'small muted' }, `Serviço conferido e assinado em ${quando(o.assinadoEm)}.`) : null,
-    tel ? el('section', {}, el('a', { class: 'btn', href: `https://wa.me/${tel.length <= 11 ? '55' + tel : tel}?text=${encodeURIComponent(`Olá, sobre a ${os}`)}`, target: '_blank', rel: 'noopener' }, 'Falar no WhatsApp')) : null,
+    zap(d.telefone, `Olá, sobre a ${os}`),
     el('footer', {}, o.atualizadoEm ? `Atualizado em ${quando(o.atualizadoEm)}. Esta página se atualiza sozinha.` : 'Esta página se atualiza sozinha.')].filter(Boolean));
 }
 const aviso = txt => out.replaceChildren(el('p', { class: 'empty muted' }, txt));
 
-let last = '';
+let dados = null, last = '', vista = null;
+function mostrar() {
+  if (!dados) return;
+  const osId = decodeURIComponent(location.hash.slice(1).split('/')[1] || '');
+  const o = osId && dados.os.find(x => x.id === osId);
+  o ? detalhe(dados, o) : lista(dados);
+  // só volta ao topo ao trocar de tela, não quando os dados se atualizam
+  if (vista !== (o ? o.id : '')) { vista = o ? o.id : ''; scrollTo(0, 0); }
+}
 async function load() {
   if (!token) return aviso('Link incompleto. Peça um novo link a quem fez o atendimento.');
   try {
-    const r = await fetch(`${C.supabaseUrl}/rest/v1/rpc/portal_os`, { method: 'POST', headers: { ...H, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_token: token }) });
+    const r = await fetch(`${C.supabaseUrl}/rest/v1/rpc/portal_cliente`, { method: 'POST', headers: { ...H, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_token: token }) });
     if (!r.ok) throw new Error(r.status);
-    const txt = await r.text(), o = JSON.parse(txt);
-    if (!o) return aviso('Esta OS não está disponível. Peça um novo link a quem fez o atendimento.');
-    if (txt !== last) { last = txt; render(o); }
+    const txt = await r.text(), d = JSON.parse(txt);
+    if (!d) { dados = null; return aviso('Este link não está mais disponível. Peça um novo link a quem fez o atendimento.'); }
+    pasta = d.pasta; document.getElementById('empresa').textContent = d.empresa || 'Minhas OS';
+    if (txt !== last) { last = txt; dados = d; mostrar(); }
   } catch { if (!last) aviso('Não foi possível carregar agora. Verifique a conexão e tente de novo.'); }
 }
+addEventListener('hashchange', mostrar);
 load();
 setInterval(() => { if (!document.hidden) load(); }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });

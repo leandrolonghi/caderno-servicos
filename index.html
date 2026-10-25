@@ -504,6 +504,7 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
         <div class="list" id="machBox"></div>
         <div class="row"><button type="button" id="btnAddMach">+ Máquina</button></div>
       </fieldset>
+      <div class="row" id="cliPortalRow" hidden><button type="button" id="btnPortalCli">Link do portal do cliente</button></div>
       <div class="row" id="cliDelRow" hidden><button type="button" class="danger" id="btnDelCli">Excluir cliente</button></div>
     </div>
   </form>
@@ -804,7 +805,7 @@ function openCli(id) {
   cliMachines = id ? machinesOf(id).map(m => ({ ...m })) : [];
   cliMachines._removed = [];
   renderMachEdit();
-  $('#cliDelRow').hidden = !id; $('#btnDelCli').dataset.armed = ''; cliAuto.reset();
+  $('#cliDelRow').hidden = !id; $('#cliPortalRow').hidden = !id; $('#btnDelCli').dataset.armed = ''; cliAuto.reset();
   $('#btnDelCli').textContent = 'Excluir cliente';
   $('#cliSheet').hidden = false; $('#cliSheet').scrollTop = 0;
   opening = false;
@@ -843,7 +844,7 @@ async function saveCli() {
     }
     for (const rid of cliMachines._removed) await store.doc('maquinas/' + rid).delete();
     cliMachines._removed = [];
-    $('#cliTitle').textContent = 'Editar cliente'; $('#cliDelRow').hidden = false;
+    $('#cliTitle').textContent = 'Editar cliente'; $('#cliDelRow').hidden = false; $('#cliPortalRow').hidden = false;
   } catch (err) { toast('Não foi possível salvar: ' + (err.message || err.code)); return false; }
 }
 $('#btnDelCli').onclick = async e => {
@@ -1438,21 +1439,24 @@ $('#btnReport').onclick = async () => {
 };
 
 /* ---------- Portal do cliente ----------
-   Cada OS ganha um código aleatório; quem tem o link vê só o andamento (sem valores). */
-$('#btnPortal').onclick = async () => {
-  let a = await saveSvc(false); if (!a) return;
-  if (!a.portal) {
+   Cada cliente ganha um código aleatório; quem tem o link vê só as OS dele, sem valores. */
+async function sharePortal(clienteId, a) {
+  const c = clientes[clienteId]; if (!c) return;
+  let tok = c.portal;
+  if (!tok) {
     const b = crypto.getRandomValues(new Uint8Array(18));
-    a = { ...a, portal: btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_') };
-    await store.doc('atendimentos/' + a.id).update({ portal: a.portal });
+    tok = btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_');
+    await store.doc('clientes/' + clienteId).update({ portal: tok });
   }
-  const url = new URL('portal/#' + a.portal, location.href.split('#')[0]).href;
-  const text = `Acompanhe a ${osLabel(a)}${cfg.nome ? ' da ' + cfg.nome : ''}:`;
+  const url = new URL(`portal/#${tok}${a ? '/' + a.id : ''}`, location.href.split('#')[0]).href;
+  const text = a ? `Acompanhe a ${osLabel(a)}${cfg.nome ? ' da ' + cfg.nome : ''}:` : `Acompanhe suas ordens de serviço${cfg.nome ? ' da ' + cfg.nome : ''}:`;
   if (navigator.onLine === false) toast('O link abre assim que o app enviar os dados');
-  if (navigator.share) { try { await navigator.share({ title: osLabel(a), text, url }); return; } catch (e) { if (e?.name === 'AbortError') return; } }
+  if (navigator.share) { try { await navigator.share({ title: a ? osLabel(a) : 'Minhas OS', text, url }); return; } catch (e) { if (e?.name === 'AbortError') return; } }
   try { await navigator.clipboard.writeText(`${text} ${url}`); toast('Link copiado. Cole no WhatsApp.'); }
   catch { prompt('Copie o link:', url); }
-};
+}
+$('#btnPortal').onclick = async () => { const a = await saveSvc(false); if (a) sharePortal(a.clienteId, a); };
+$('#btnPortalCli').onclick = async () => { await cliAuto.flush(); if (editingCli) sharePortal(editingCli); };
 
 /* ---------- PDF da OS ---------- */
 async function imgData(id, maxDim = 1200) {

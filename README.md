@@ -8,7 +8,7 @@ App de ordens de serviço da Longhi Manutenções. Funciona no celular, tablet e
 - `sw.js`: guarda o app no aparelho para abrir sem internet
 - `config.js`: endereço e chave pública do projeto Supabase
 - `supabase/configurar.sql`: cria a tabela e a pasta de fotos no Supabase (rodar uma vez)
-- `portal/`: página que o cliente abre pelo link da OS para acompanhar o andamento (sem valores)
+- `portal/`: página que o cliente abre pelo link dele para ver a OS em andamento e o histórico (sem valores)
 - `supabase/portal.sql`: libera essa página no Supabase (rodar uma vez)
 
 Publicado pelo GitHub Pages (Settings › Pages › branch `main`, pasta `/`).
