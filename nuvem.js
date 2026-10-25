@@ -150,7 +150,7 @@ window.Nuvem = {
   /* acesso do cliente ao portal (precisa de internet) */
   async acesso(clienteId) {
     if (!sb || !user) throw 'sem_login';
-    const { data, error } = await sb.from('portal_acesso').select('login').eq('cliente_id', clienteId).maybeSingle();
+    const { data, error } = await sb.from('portal_acesso').select('login,trocar').eq('cliente_id', clienteId).maybeSingle();
     if (error) throw error; return data;
   },
   async definirAcesso(clienteId, login, senha) {
