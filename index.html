@@ -1446,7 +1446,8 @@ $('#btnReport').onclick = async () => {
    O cliente entra no portal com usuário e senha e vê só as OS dele (sem valores por item).
    Criar, trocar e remover o acesso precisa de internet: a senha vai direto para a nuvem e
    fica guardada embaralhada, por isso só aparece na hora de enviar. */
-const portalUrl = osId => new URL('portal/' + (osId ? '#' + osId : ''), location.href.split('#')[0]).href;
+const PORTAL = 'https://longhimanutencoes.github.io/';
+const portalUrl = osId => PORTAL + (osId ? '#' + osId : '');
 async function shareTxt(title, text) {
   if (navigator.share) { try { await navigator.share({ title, text }); return; } catch (e) { if (e?.name === 'AbortError') return; } }
   try { await navigator.clipboard.writeText(text); toast('Copiado. Cole no WhatsApp.'); }
