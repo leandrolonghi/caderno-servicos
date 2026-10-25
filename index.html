@@ -1459,8 +1459,8 @@ async function renderAcesso(cid) {
   del.dataset.armed = ''; del.textContent = 'Remover acesso';
   const show = a => {
     if (editingCli !== cid) return;
-    info.textContent = a === undefined ? 'Conecte-se à internet para ver o acesso' : a ? `Usuário: ${a.login}` : 'O cliente ainda não tem acesso';
-    $('#btnPortalCli').textContent = a ? 'Trocar senha' : 'Criar acesso'; del.hidden = !a;
+    info.textContent = a === undefined ? 'Conecte-se à internet para ver o acesso' : a ? `Usuário: ${a.login}` + (a.trocar ? ' · aguardando o cliente criar a senha' : '') : 'O cliente ainda não tem acesso';
+    $('#btnPortalCli').textContent = a ? 'Resetar senha' : 'Criar acesso'; del.hidden = !a;
   };
   show(acessoCli[cid]);
   try { show(acessoCli[cid] = await Nuvem.acesso(cid)); } catch { if (!(cid in acessoCli)) show(undefined); }
@@ -1480,16 +1480,16 @@ $('#btnPortalCli').onclick = async () => {
     ok.disabled = true; ok.textContent = 'Salvando…';
     try {
       const login = await Nuvem.definirAcesso(cid, usuario.value, senha.value);
-      acessoCli[cid] = { login }; renderAcesso(cid); close();
-      await shareTxt('Acesso ao portal', `Acompanhe suas ordens de serviço${cfg.nome ? ' da ' + cfg.nome : ''}:\n${portalUrl()}\nUsuário: ${login}\nSenha: ${senha.value}`);
+      acessoCli[cid] = { login, trocar: true }; renderAcesso(cid); close();
+      await shareTxt('Acesso ao portal', `Acompanhe suas ordens de serviço${cfg.nome ? ' da ' + cfg.nome : ''}:\n${portalUrl()}\nUsuário: ${login}\nSenha provisória: ${senha.value}\nNo primeiro acesso você vai criar a sua própria senha.`);
     } catch (e) { msg.textContent = String(e?.message || e); }
     finally { ok.disabled = false; ok.textContent = 'Salvar e enviar'; }
   } }, 'Salvar e enviar');
   const ov = el('div', { class: 'qdlg', role: 'dialog', 'aria-label': 'Acesso ao portal', onclick: e => { if (e.target === ov) close(); } },
     el('div', { class: 'qdlg-box' },
-      el('h3', {}, atual ? 'Trocar senha do portal' : 'Acesso ao portal'),
+      el('h3', {}, atual ? 'Resetar senha do portal' : 'Acesso ao portal'),
       el('label', { class: 'f', for: 'pUsuario' }, 'Usuário (telefone ou CPF/CNPJ)', usuario),
-      el('label', { class: 'f', for: 'pSenha' }, 'Senha', senha),
+      el('label', { class: 'f', for: 'pSenha' }, 'Senha provisória', senha),
       msg,
       el('div', { class: 'row', style: 'justify-content:flex-end' }, el('button', { type: 'button', class: 'ghost', onclick: close }, 'Cancelar'), ok)));
   document.body.append(ov); requestAnimationFrame(() => senha.select());

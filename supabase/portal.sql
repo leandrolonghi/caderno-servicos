@@ -6,6 +6,7 @@
 -- O valor total aparece só depois que a OS está finalizada.
 -- Valores por item, materiais, CPF, telefone e assinatura não aparecem.
 -- As senhas ficam guardadas embaralhadas (bcrypt): nem você consegue ler depois.
+-- A senha que você cria é provisória: no primeiro acesso o cliente cria a senha dele.
 
 create extension if not exists pgcrypto with schema extensions;
 
@@ -45,10 +46,12 @@ create table if not exists public.portal_acesso (
   criado_em timestamptz not null default now(),
   primary key (owner, cliente_id)
 );
+-- true = senha provisória (criada ou resetada no app); o portal pede uma senha nova
+alter table public.portal_acesso add column if not exists trocar boolean not null default true;
 alter table public.portal_acesso enable row level security;
 revoke all on public.portal_acesso from anon, authenticated;
 -- o app só lê quem tem acesso (sem senha nem token); criar e remover passa pelas funções abaixo
-grant select (owner, cliente_id, login, criado_em) on public.portal_acesso to authenticated;
+grant select (owner, cliente_id, login, criado_em, trocar) on public.portal_acesso to authenticated;
 drop policy if exists "acessos do dono" on public.portal_acesso;
 create policy "acessos do dono" on public.portal_acesso for select to authenticated using (owner = auth.uid());
 
@@ -59,7 +62,7 @@ language sql immutable as $$
               then regexp_replace(coalesce(p, ''), '[^0-9]', '', 'g') else lower(trim(p)) end;
 $$;
 
--- App: cria o acesso ou troca a senha
+-- App: cria o acesso ou reseta a senha (vira provisória de novo)
 create or replace function public.portal_definir_acesso(p_cliente text, p_login text, p_senha text) returns text
 language plpgsql security definer set search_path = public, extensions as $$
 declare l text := public.portal_login_norm(p_login);
@@ -76,7 +79,7 @@ begin
   insert into portal_acesso (owner, cliente_id, login, senha, token)
   values (auth.uid(), p_cliente, l, crypt(p_senha, gen_salt('bf')), translate(encode(gen_random_bytes(24), 'base64'), '+/', '-_'))
   on conflict (owner, cliente_id) do update
-    set login = excluded.login, senha = excluded.senha, token = excluded.token;
+    set login = excluded.login, senha = excluded.senha, token = excluded.token, trocar = true;
   return l;
 end $$;
 
@@ -97,12 +100,24 @@ begin
   return t;
 end $$;
 
+-- Portal: o cliente troca a senha provisória pela dele; devolve um token novo
+-- (os outros aparelhos que entraram com a senha antiga saem)
+create or replace function public.portal_nova_senha(p_token text, p_senha text) returns text
+language plpgsql security definer set search_path = public, extensions as $$
+declare t text := translate(encode(gen_random_bytes(24), 'base64'), '+/', '-_');
+begin
+  if length(coalesce(p_senha, '')) < 6 then raise exception 'A senha precisa ter pelo menos 6 caracteres'; end if;
+  update portal_acesso set senha = crypt(p_senha, gen_salt('bf')), token = t, trocar = false where token = p_token;
+  if not found then return null; end if;
+  return t;
+end $$;
+
 create or replace function public.portal_cliente(p_token text) returns jsonb
 language sql stable security definer set search_path = public as $$
   select jsonb_build_object(
     'cliente', c.data->'nome', 'fazenda', c.data->'fazenda',
     'empresa', g.data->'nome', 'telefone', g.data->'telefone',
-    'pasta', c.owner,
+    'pasta', c.owner, 'trocarSenha', pa.trocar,
     'os', (select coalesce(jsonb_agg(jsonb_build_object(
         'id', a.id, 'numero', a.data->'numero', 'data', a.data->'data', 'status', a.data->'status', 'tipo', a.data->'tipo',
         'atualizadoEm', a.data->'atualizadoEm', 'assinadoEm', a.data#>'{assinatura,em}',
@@ -142,6 +157,8 @@ $$;
 
 revoke all on function public.portal_cliente(text) from public;
 revoke all on function public.portal_entrar(text, text) from public;
+revoke all on function public.portal_nova_senha(text, text) from public;
+grant execute on function public.portal_nova_senha(text, text) to anon, authenticated;
 revoke all on function public.portal_definir_acesso(text, text, text) from public;
 revoke all on function public.portal_remover_acesso(text) from public;
 grant execute on function public.portal_entrar(text, text) to anon, authenticated;
