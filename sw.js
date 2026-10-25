@@ -1,6 +1,6 @@
 /* Guarda o app no aparelho para abrir sem sinal.
    Abre sempre a cópia guardada e busca a versão nova em segundo plano (vale na próxima abertura). */
-const V = 'caderno-1792953401';
+const V = 'caderno-1792953402';
 const SHELL = ['./', 'index.html', 'config.js', 'nuvem.js', 'conta.js', 'manifest.webmanifest',
   'vendor/supabase.js', 'vendor/591.supabase.js', 'vendor/jspdf.umd.min.js', 'vendor/jspdf.plugin.autotable.min.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-180.png', 'icons/favicon-64.png'];
@@ -17,6 +17,8 @@ self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
+  // O portal do cliente é outra página e sempre busca da internet
+  if (url.origin === location.origin && url.pathname.includes('/portal/')) return;
   if (url.origin === location.origin) {
     const key = req.mode === 'navigate' ? 'index.html' : req;
     e.respondWith(caches.open(V).then(async c => {

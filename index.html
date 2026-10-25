@@ -429,6 +429,7 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
           <label class="f" for="sHorimetro">Horímetro da máquina<input id="sHorimetro" type="number" inputmode="decimal" step="0.1" min="0"></label>
         </div>
         <div class="idphotos" id="idPhotos"></div>
+        <div class="row" id="portalRow" hidden><button type="button" id="btnPortal">Link para o cliente acompanhar</button></div>
       </fieldset>
       <fieldset data-tab="tempo"><legend>Apontamentos</legend>
         <div class="aplist" id="apList"></div>
@@ -888,7 +889,7 @@ function openSvc(id, preset = {}) {
   parts = (a.pecas || []).map(p => ({ ...p })); photos = [...(a.fotos || [])]; fotosProb = [...(a.fotosProblema || [])]; testes = (a.testes || []).map(x => ({ desc: x.desc || '', fotos: [...(x.fotos || [])] }));
   renderParts(); renderPhotos(); renderTestes(); renderTotals(); renderApont(); renderChk(); renderSig(); renderHist(); renderIdPhotos();
   clearInterval(tick); tick = setInterval(() => { if ($('#svcSheet').hidden) clearInterval(tick); else if (apont.some(x => !x.fim)) renderApont(true); }, 1000);
-  $('#reportBox').hidden = !id; $('#reportPre').hidden = true;
+  $('#reportBox').hidden = !id; $('#portalRow').hidden = !id; $('#reportPre').hidden = true;
   $('#delRow').hidden = !id; $('#btnDelSvc').dataset.armed = ''; $('#btnDelSvc').textContent = 'Excluir atendimento';
   showSubTab('problema');
   $('#svcSheet').hidden = false; showOsTab(id && isRunning(a) ? 'tempo' : 'geral');
@@ -1345,7 +1346,7 @@ async function saveSvc(close, silent) {
   try {
     await store.doc('atendimentos/' + id).set(data);
     editingSvc = id; $('#svcTitle').textContent = osLabel(data);
-    $('#reportBox').hidden = false; $('#delRow').hidden = false;
+    $('#reportBox').hidden = false; $('#portalRow').hidden = false; $('#delRow').hidden = false;
     if (close) { $('#svcSheet').hidden = true; toast(osLabel(data) + ' salva'); }
     return data;
   } catch (err) { toast('Não foi possível salvar: ' + (err.message || err.code)); }
@@ -1434,6 +1435,23 @@ $('#btnReport').onclick = async () => {
   pre.textContent = txt; pre.hidden = false;
   try { await navigator.clipboard.writeText(txt); toast('Relatório copiado. Cole no WhatsApp.'); }
   catch { const r = document.createRange(); r.selectNodeContents(pre); const sl = getSelection(); sl.removeAllRanges(); sl.addRange(r); toast('Texto selecionado. Toque em Copiar.'); }
+};
+
+/* ---------- Portal do cliente ----------
+   Cada OS ganha um código aleatório; quem tem o link vê só o andamento (sem valores). */
+$('#btnPortal').onclick = async () => {
+  let a = await saveSvc(false); if (!a) return;
+  if (!a.portal) {
+    const b = crypto.getRandomValues(new Uint8Array(18));
+    a = { ...a, portal: btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_') };
+    await store.doc('atendimentos/' + a.id).update({ portal: a.portal });
+  }
+  const url = new URL('portal/#' + a.portal, location.href.split('#')[0]).href;
+  const text = `Acompanhe a ${osLabel(a)}${cfg.nome ? ' da ' + cfg.nome : ''}:`;
+  if (navigator.onLine === false) toast('O link abre assim que o app enviar os dados');
+  if (navigator.share) { try { await navigator.share({ title: osLabel(a), text, url }); return; } catch (e) { if (e?.name === 'AbortError') return; } }
+  try { await navigator.clipboard.writeText(`${text} ${url}`); toast('Link copiado. Cole no WhatsApp.'); }
+  catch { prompt('Copie o link:', url); }
 };
 
 /* ---------- PDF da OS ---------- */
