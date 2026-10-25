@@ -146,6 +146,22 @@ window.Nuvem = {
   onAuth: fn => authFns.push(fn),
   async signIn(email, password) { const { data, error } = await sb.auth.signInWithPassword({ email, password }); if (error) throw msg(error); setUser(data.user); },
   async signUp(email, password) { const { data, error } = await sb.auth.signUp({ email, password }); if (error) throw msg(error); if (!data.session) throw 'Conta criada. Abra o link de confirmação que chegou no seu e-mail e depois toque em Entrar.'; setUser(data.user); },
-  async signOut() { try { await sb.auth.signOut(); } catch {} setUser(null); }
+  async signOut() { try { await sb.auth.signOut(); } catch {} setUser(null); },
+  /* acesso do cliente ao portal (precisa de internet) */
+  async acesso(clienteId) {
+    if (!sb || !user) throw 'sem_login';
+    const { data, error } = await sb.from('portal_acesso').select('login').eq('cliente_id', clienteId).maybeSingle();
+    if (error) throw error; return data;
+  },
+  async definirAcesso(clienteId, login, senha) {
+    if (!sb || !user) throw 'Entre na sua conta';
+    const { data, error } = await sb.rpc('portal_definir_acesso', { p_cliente: clienteId, p_login: login, p_senha: senha });
+    if (error) throw /fetch|network/i.test(error.message) ? 'Sem conexão. Tente de novo quando tiver sinal.' : error.message; return data;
+  },
+  async removerAcesso(clienteId) {
+    if (!sb || !user) throw 'Entre na sua conta';
+    const { error } = await sb.rpc('portal_remover_acesso', { p_cliente: clienteId });
+    if (error) throw error.message;
+  }
 };
 })();

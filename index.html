@@ -504,7 +504,10 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
         <div class="list" id="machBox"></div>
         <div class="row"><button type="button" id="btnAddMach">+ Máquina</button></div>
       </fieldset>
-      <div class="row" id="cliPortalRow" hidden><button type="button" id="btnPortalCli">Link do portal do cliente</button></div>
+      <fieldset id="cliPortalRow" hidden><legend>Acesso ao portal</legend>
+        <p class="small muted" style="margin:0" id="portalInfo"></p>
+        <div class="row"><button type="button" id="btnPortalCli">Criar acesso</button><button type="button" class="danger" id="btnPortalDel" hidden>Remover acesso</button></div>
+      </fieldset>
       <div class="row" id="cliDelRow" hidden><button type="button" class="danger" id="btnDelCli">Excluir cliente</button></div>
     </div>
   </form>
@@ -806,6 +809,7 @@ function openCli(id) {
   cliMachines._removed = [];
   renderMachEdit();
   $('#cliDelRow').hidden = !id; $('#cliPortalRow').hidden = !id; $('#btnDelCli').dataset.armed = ''; cliAuto.reset();
+  if (id) renderAcesso(id);
   $('#btnDelCli').textContent = 'Excluir cliente';
   $('#cliSheet').hidden = false; $('#cliSheet').scrollTop = 0;
   opening = false;
@@ -844,7 +848,7 @@ async function saveCli() {
     }
     for (const rid of cliMachines._removed) await store.doc('maquinas/' + rid).delete();
     cliMachines._removed = [];
-    $('#cliTitle').textContent = 'Editar cliente'; $('#cliDelRow').hidden = false; $('#cliPortalRow').hidden = false;
+    $('#cliTitle').textContent = 'Editar cliente'; $('#cliDelRow').hidden = false; if ($('#cliPortalRow').hidden) { $('#cliPortalRow').hidden = false; renderAcesso(id); }
   } catch (err) { toast('Não foi possível salvar: ' + (err.message || err.code)); return false; }
 }
 $('#btnDelCli').onclick = async e => {
@@ -1439,24 +1443,66 @@ $('#btnReport').onclick = async () => {
 };
 
 /* ---------- Portal do cliente ----------
-   Cada cliente ganha um código aleatório; quem tem o link vê só as OS dele, sem valores. */
-async function sharePortal(clienteId, a) {
-  const c = clientes[clienteId]; if (!c) return;
-  let tok = c.portal;
-  if (!tok) {
-    const b = crypto.getRandomValues(new Uint8Array(18));
-    tok = btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_');
-    await store.doc('clientes/' + clienteId).update({ portal: tok });
-  }
-  const url = new URL(`portal/#${tok}${a ? '/' + a.id : ''}`, location.href.split('#')[0]).href;
-  const text = a ? `Acompanhe a ${osLabel(a)}${cfg.nome ? ' da ' + cfg.nome : ''}:` : `Acompanhe suas ordens de serviço${cfg.nome ? ' da ' + cfg.nome : ''}:`;
-  if (navigator.onLine === false) toast('O link abre assim que o app enviar os dados');
-  if (navigator.share) { try { await navigator.share({ title: a ? osLabel(a) : 'Minhas OS', text, url }); return; } catch (e) { if (e?.name === 'AbortError') return; } }
-  try { await navigator.clipboard.writeText(`${text} ${url}`); toast('Link copiado. Cole no WhatsApp.'); }
-  catch { prompt('Copie o link:', url); }
+   O cliente entra no portal com usuário e senha e vê só as OS dele (sem valores por item).
+   Criar, trocar e remover o acesso precisa de internet: a senha vai direto para a nuvem e
+   fica guardada embaralhada, por isso só aparece na hora de enviar. */
+const portalUrl = osId => new URL('portal/' + (osId ? '#' + osId : ''), location.href.split('#')[0]).href;
+async function shareTxt(title, text) {
+  if (navigator.share) { try { await navigator.share({ title, text }); return; } catch (e) { if (e?.name === 'AbortError') return; } }
+  try { await navigator.clipboard.writeText(text); toast('Copiado. Cole no WhatsApp.'); }
+  catch { prompt('Copie o texto:', text); }
 }
-$('#btnPortal').onclick = async () => { const a = await saveSvc(false); if (a) sharePortal(a.clienteId, a); };
-$('#btnPortalCli').onclick = async () => { await cliAuto.flush(); if (editingCli) sharePortal(editingCli); };
+let acessoCli = {};
+async function renderAcesso(cid) {
+  const info = $('#portalInfo'), del = $('#btnPortalDel');
+  del.dataset.armed = ''; del.textContent = 'Remover acesso';
+  const show = a => {
+    if (editingCli !== cid) return;
+    info.textContent = a === undefined ? 'Conecte-se à internet para ver o acesso' : a ? `Usuário: ${a.login}` : 'O cliente ainda não tem acesso';
+    $('#btnPortalCli').textContent = a ? 'Trocar senha' : 'Criar acesso'; del.hidden = !a;
+  };
+  show(acessoCli[cid]);
+  try { show(acessoCli[cid] = await Nuvem.acesso(cid)); } catch { if (!(cid in acessoCli)) show(undefined); }
+}
+const novaSenha = () => { const c = 'abcdefghjkmnpqrstuvwxyz23456789', b = crypto.getRandomValues(new Uint8Array(8)); return [...b].map(x => c[x % c.length]).join(''); };
+$('#btnPortalCli').onclick = async () => {
+  await cliAuto.flush(); const cid = editingCli, c = clientes[cid]; if (!c) return;
+  const atual = acessoCli[cid];
+  const dig = v => String(v || '').replace(/\D/g, '');
+  const usuario = el('input', { id: 'pUsuario', value: atual?.login || dig(c.telefone).replace(/^55(?=\d{10,11}$)/, '') || dig(c.documento), autocomplete: 'off' });
+  const senha = el('input', { id: 'pSenha', value: novaSenha(), autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false' });
+  const msg = el('p', { class: 'small', style: 'margin:0;color:var(--bad)' });
+  const close = () => ov.remove();
+  const ok = el('button', { type: 'button', class: 'primary', onclick: async () => {
+    msg.textContent = '';
+    if (navigator.onLine === false) { msg.textContent = 'Precisa de internet para salvar o acesso.'; return; }
+    ok.disabled = true; ok.textContent = 'Salvando…';
+    try {
+      const login = await Nuvem.definirAcesso(cid, usuario.value, senha.value);
+      acessoCli[cid] = { login }; renderAcesso(cid); close();
+      await shareTxt('Acesso ao portal', `Acompanhe suas ordens de serviço${cfg.nome ? ' da ' + cfg.nome : ''}:\n${portalUrl()}\nUsuário: ${login}\nSenha: ${senha.value}`);
+    } catch (e) { msg.textContent = String(e?.message || e); }
+    finally { ok.disabled = false; ok.textContent = 'Salvar e enviar'; }
+  } }, 'Salvar e enviar');
+  const ov = el('div', { class: 'qdlg', role: 'dialog', 'aria-label': 'Acesso ao portal', onclick: e => { if (e.target === ov) close(); } },
+    el('div', { class: 'qdlg-box' },
+      el('h3', {}, atual ? 'Trocar senha do portal' : 'Acesso ao portal'),
+      el('label', { class: 'f', for: 'pUsuario' }, 'Usuário (telefone ou CPF/CNPJ)', usuario),
+      el('label', { class: 'f', for: 'pSenha' }, 'Senha', senha),
+      msg,
+      el('div', { class: 'row', style: 'justify-content:flex-end' }, el('button', { type: 'button', class: 'ghost', onclick: close }, 'Cancelar'), ok)));
+  document.body.append(ov); requestAnimationFrame(() => senha.select());
+};
+$('#btnPortalDel').onclick = async e => {
+  const b = e.currentTarget, cid = editingCli;
+  if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Toque de novo para confirmar'; return; }
+  try { await Nuvem.removerAcesso(cid); acessoCli[cid] = null; renderAcesso(cid); toast('Acesso removido'); }
+  catch (err) { toast(navigator.onLine === false ? 'Precisa de internet para remover o acesso' : 'Não foi possível remover: ' + (err?.message || err)); b.dataset.armed = ''; b.textContent = 'Remover acesso'; }
+};
+$('#btnPortal').onclick = async () => {
+  const a = await saveSvc(false); if (!a) return;
+  shareTxt(osLabel(a), `Acompanhe a ${osLabel(a)}${cfg.nome ? ' da ' + cfg.nome : ''} (entre com seu usuário e senha):\n${portalUrl(a.id)}`);
+};
 
 /* ---------- PDF da OS ---------- */
 async function imgData(id, maxDim = 1200) {
