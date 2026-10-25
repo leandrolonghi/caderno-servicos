@@ -505,8 +505,8 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
         <div class="row"><button type="button" id="btnAddMach">+ Máquina</button></div>
       </fieldset>
       <fieldset id="cliPortalRow" hidden><legend>Acesso ao portal</legend>
-        <p class="small muted" style="margin:0" id="portalInfo"></p>
-        <div class="row"><button type="button" id="btnPortalCli">Criar acesso</button><button type="button" class="danger" id="btnPortalDel" hidden>Remover acesso</button></div>
+        <div class="list" id="portalList"></div>
+        <div class="row"><button type="button" id="btnPortalCli">+ Login</button></div>
       </fieldset>
       <div class="row" id="cliDelRow" hidden><button type="button" class="danger" id="btnDelCli">Excluir cliente</button></div>
     </div>
@@ -1453,56 +1453,62 @@ async function shareTxt(title, text) {
   try { await navigator.clipboard.writeText(text); toast('Copiado. Cole no WhatsApp.'); }
   catch { prompt('Copie o texto:', text); }
 }
+// Logins do portal por cliente (um por e-mail); a lista vem da nuvem
 let acessoCli = {};
 async function renderAcesso(cid) {
-  const info = $('#portalInfo'), del = $('#btnPortalDel');
-  del.dataset.armed = ''; del.textContent = 'Remover acesso';
-  const show = a => {
+  const box = $('#portalList');
+  const show = list => {
     if (editingCli !== cid) return;
-    info.textContent = a === undefined ? 'Conecte-se à internet para ver o acesso' : a ? `Usuário: ${a.login}` + (a.trocar ? ' · aguardando o cliente criar a senha' : '') : 'O cliente ainda não tem acesso';
-    $('#btnPortalCli').textContent = a ? 'Resetar senha' : 'Criar acesso'; del.hidden = !a;
+    if (list === undefined) { box.replaceChildren(el('div', { class: 'small muted' }, 'Conecte-se à internet para ver os logins')); return; }
+    if (!list.length) { box.replaceChildren(el('div', { class: 'small muted' }, 'O cliente ainda não tem login no portal')); return; }
+    box.replaceChildren(...list.map(a => {
+      const del = el('button', { type: 'button', class: 'danger', style: 'min-height:36px', onclick: () => removerLogin(cid, a, del) }, 'Remover');
+      return el('div', { class: 'card' },
+        el('div', {}, el('b', {}, a.login), a.trocar && el('div', { class: 'small muted' }, 'Aguardando o cliente criar a senha')),
+        el('div', { class: 'row' }, el('button', { type: 'button', style: 'min-height:36px', onclick: () => loginDlg(cid, a) }, 'Resetar senha'), del));
+    }));
   };
   show(acessoCli[cid]);
-  try { show(acessoCli[cid] = await Nuvem.acesso(cid)); } catch { if (!(cid in acessoCli)) show(undefined); }
+  try { show(acessoCli[cid] = await Nuvem.acessos(cid)); } catch { if (!(cid in acessoCli)) show(undefined); }
+}
+async function removerLogin(cid, a, b) {
+  if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Toque de novo para confirmar'; return; }
+  try { await Nuvem.removerAcesso(a.id); acessoCli[cid] = (acessoCli[cid] || []).filter(x => x.id !== a.id); renderAcesso(cid); toast('Login removido'); }
+  catch (err) { toast(navigator.onLine === false ? 'Precisa de internet para remover o login' : 'Não foi possível remover: ' + (err?.message || err)); b.dataset.armed = ''; b.textContent = 'Remover'; }
 }
 const novaSenha = () => { const c = 'abcdefghjkmnpqrstuvwxyz23456789', b = crypto.getRandomValues(new Uint8Array(8)); return [...b].map(x => c[x % c.length]).join(''); };
-$('#btnPortalCli').onclick = async () => {
-  await cliAuto.flush(); const cid = editingCli, c = clientes[cid]; if (!c) return;
-  const atual = acessoCli[cid];
-  const dig = v => String(v || '').replace(/\D/g, '');
-  const usuario = el('input', { id: 'pUsuario', value: atual?.login || dig(c.telefone).replace(/^55(?=\d{10,11}$)/, '') || dig(c.documento), autocomplete: 'off' });
+async function loginDlg(cid, atual) {
+  await cliAuto.flush(); if (!clientes[cid]) return;
+  const email = el('input', { id: 'pEmail', type: 'email', value: atual?.login || '', placeholder: 'cliente@email.com', autocomplete: 'off', autocapitalize: 'off' });
   const senha = el('input', { id: 'pSenha', value: novaSenha(), autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false' });
   const msg = el('p', { class: 'small', style: 'margin:0;color:var(--bad)' });
   const close = () => ov.remove();
   const ok = el('button', { type: 'button', class: 'primary', onclick: async () => {
     msg.textContent = '';
-    if (navigator.onLine === false) { msg.textContent = 'Precisa de internet para salvar o acesso.'; return; }
+    if (navigator.onLine === false) { msg.textContent = 'Precisa de internet para salvar o login.'; return; }
     ok.disabled = true; ok.textContent = 'Salvando…';
     try {
-      const login = await Nuvem.definirAcesso(cid, usuario.value, senha.value);
-      acessoCli[cid] = { login, trocar: true }; renderAcesso(cid); close();
-      await shareTxt('Acesso ao portal', `Acompanhe suas ordens de serviço${cfg.nome ? ' da ' + cfg.nome : ''}:\n${portalUrl()}\nUsuário: ${login}\nSenha provisória: ${senha.value}\nNo primeiro acesso você vai criar a sua própria senha.`);
+      const login = email.value.trim().toLowerCase();
+      const id = await Nuvem.definirAcesso(cid, login, senha.value, atual?.id);
+      acessoCli[cid] = [...(acessoCli[cid] || []).filter(x => x.id !== id), { id, login, trocar: true }].sort((x, y) => x.login.localeCompare(y.login));
+      renderAcesso(cid); close();
+      await shareTxt('Acesso ao portal', `Acompanhe suas ordens de serviço${cfg.nome ? ' da ' + cfg.nome : ''}:\n${portalUrl()}\nE-mail: ${login}\nSenha provisória: ${senha.value}\nNo primeiro acesso você vai criar a sua própria senha.`);
     } catch (e) { msg.textContent = String(e?.message || e); }
     finally { ok.disabled = false; ok.textContent = 'Salvar e enviar'; }
   } }, 'Salvar e enviar');
-  const ov = el('div', { class: 'qdlg', role: 'dialog', 'aria-label': 'Acesso ao portal', onclick: e => { if (e.target === ov) close(); } },
+  const ov = el('div', { class: 'qdlg', role: 'dialog', 'aria-label': 'Login do portal', onclick: e => { if (e.target === ov) close(); } },
     el('div', { class: 'qdlg-box' },
-      el('h3', {}, atual ? 'Resetar senha do portal' : 'Acesso ao portal'),
-      el('label', { class: 'f', for: 'pUsuario' }, 'Usuário (telefone ou CPF/CNPJ)', usuario),
+      el('h3', {}, atual ? 'Resetar senha do portal' : 'Novo login do portal'),
+      el('label', { class: 'f', for: 'pEmail' }, 'E-mail', email),
       el('label', { class: 'f', for: 'pSenha' }, 'Senha provisória', senha),
       msg,
       el('div', { class: 'row', style: 'justify-content:flex-end' }, el('button', { type: 'button', class: 'ghost', onclick: close }, 'Cancelar'), ok)));
-  document.body.append(ov); requestAnimationFrame(() => senha.select());
-};
-$('#btnPortalDel').onclick = async e => {
-  const b = e.currentTarget, cid = editingCli;
-  if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Toque de novo para confirmar'; return; }
-  try { await Nuvem.removerAcesso(cid); acessoCli[cid] = null; renderAcesso(cid); toast('Acesso removido'); }
-  catch (err) { toast(navigator.onLine === false ? 'Precisa de internet para remover o acesso' : 'Não foi possível remover: ' + (err?.message || err)); b.dataset.armed = ''; b.textContent = 'Remover acesso'; }
-};
+  document.body.append(ov); requestAnimationFrame(() => (atual ? senha : email).focus());
+}
+$('#btnPortalCli').onclick = () => loginDlg(editingCli);
 $('#btnPortal').onclick = async () => {
   const a = await saveSvc(false); if (!a) return;
-  shareTxt(osLabel(a), `Acompanhe a ${osLabel(a)}${cfg.nome ? ' da ' + cfg.nome : ''} (entre com seu usuário e senha):\n${portalUrl(a.id)}`);
+  shareTxt(osLabel(a), `Acompanhe a ${osLabel(a)}${cfg.nome ? ' da ' + cfg.nome : ''} (entre com seu e-mail e senha):\n${portalUrl(a.id)}`);
 };
 
 /* ---------- PDF da OS ---------- */
