@@ -1,0 +1,84 @@
+-- Portal do cliente: cole tudo no Supabase em SQL Editor > New query e clique em Run (uma vez).
+-- Cada cliente recebe um link próprio e vê só as OS dele: a que está em andamento e o histórico.
+-- Aparecem situação, datas, máquina, falha, causa, solução, testes, cuidados, fotos e horários.
+-- O valor total aparece só depois que a OS está finalizada.
+-- Valores por item, materiais, CPF, telefone e assinatura não aparecem.
+-- Sem o código do link nada é mostrado.
+
+drop function if exists public.portal_os(text);
+
+-- Lê um número guardado como número ou texto ("1,5"); o que não for número vale 0
+create or replace function public.portal_num(j jsonb) returns numeric
+language plpgsql immutable as $$
+begin
+  if jsonb_typeof(j) = 'number' then return (j #>> '{}')::numeric; end if;
+  if jsonb_typeof(j) = 'string' then return replace(j #>> '{}', ',', '.')::numeric; end if;
+  return 0;
+exception when others then return 0;
+end $$;
+
+-- Mesmo cálculo do app: materiais + horas × valor da hora + km × valor do km
+-- (OS faturada usa os valores congelados nela; as outras, os valores atuais de Ajustes)
+create or replace function public.portal_total(a jsonb, cfg jsonb) returns numeric
+language sql immutable as $$
+  select round(
+    coalesce((select sum(public.portal_num(p->'qtd') * public.portal_num(p->'valor'))
+              from jsonb_array_elements(jsonb_path_query_array(a, '$.pecas[*]')) p), 0)
+    + public.portal_num(a->'horas') * public.portal_num(case when a->>'status' = 'faturado' and a ? 'valorHora' and a->'valorHora' <> 'null' then a->'valorHora' else cfg->'valorHora' end)
+    + public.portal_num(a->'km') * public.portal_num(case when a->>'status' = 'faturado' and a ? 'valorHora' and a->'valorHora' <> 'null' then a->'valorKm' else cfg->'valorKm' end),
+  2);
+$$;
+
+create index if not exists docs_portal on public.docs ((data->>'portal')) where col = 'clientes';
+
+create or replace function public.portal_cliente(p_token text) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select jsonb_build_object(
+    'cliente', c.data->'nome', 'fazenda', c.data->'fazenda',
+    'empresa', g.data->'nome', 'telefone', g.data->'telefone',
+    'pasta', c.owner,
+    'os', (select coalesce(jsonb_agg(jsonb_build_object(
+        'id', a.id, 'numero', a.data->'numero', 'data', a.data->'data', 'status', a.data->'status', 'tipo', a.data->'tipo',
+        'atualizadoEm', a.data->'atualizadoEm', 'assinadoEm', a.data#>'{assinatura,em}',
+        'falha', a.data->'problema', 'causa', a.data->'causa', 'solucao', a.data->'descricao', 'cuidados', a.data->'recomendacao',
+        'fotosFalha', jsonb_path_query_array(a.data, '$.fotosProblema[*]'),
+        'fotos', jsonb_path_query_array(a.data, '$.fotos[*]'),
+        'testes', (select coalesce(jsonb_agg(jsonb_build_object('desc', t->'desc', 'fotos', jsonb_path_query_array(t, '$.fotos[*]'))), '[]')
+                   from jsonb_array_elements(jsonb_path_query_array(a.data, '$.testes[*]')) t),
+        'apontamentos', (select coalesce(jsonb_agg(jsonb_build_object('tipo', x->'tipo', 'ini', x->'ini', 'fim', x->'fim', 'motivo', x->'motivo')), '[]')
+                         from jsonb_array_elements(jsonb_path_query_array(a.data, '$.apontamentos[*]')) x),
+        'total', case when a.data->>'status' in ('concluido', 'faturado') then public.portal_total(a.data, coalesce(g.data, '{}')) end,
+        'maquina', nullif(concat_ws(' ', m.data->>'tipo', m.data->>'marca', m.data->>'modelo'), ''), 'serie', m.data->'serie'
+      ) order by a.data->>'data' desc, a.data->'numero' desc nulls last), '[]')
+      from public.docs a
+      left join public.docs m on m.owner = a.owner and m.col = 'maquinas' and m.id = a.data->>'maquinaId' and not m.deleted
+      where a.owner = c.owner and a.col = 'atendimentos' and not a.deleted and a.data->>'clienteId' = c.id)
+  )
+  from public.docs c
+  left join public.docs g on g.owner = c.owner and g.col = 'config' and g.id = 'geral'
+  where c.col = 'clientes' and not c.deleted and length(p_token) >= 20 and c.data->>'portal' = p_token
+  limit 1;
+$$;
+
+-- Fotos: o portal só consegue abrir as fotos de falha, testes e serviço das OS de clientes com link
+create or replace function public.portal_foto(p_name text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.docs a
+    join public.docs c on c.owner = a.owner and c.col = 'clientes' and c.id = a.data->>'clienteId' and not c.deleted
+    where a.owner::text = split_part(p_name, '/', 1) and a.col = 'atendimentos' and not a.deleted
+      and coalesce(c.data->>'portal', '') <> ''
+      and (coalesce(a.data->'fotos' ? split_part(p_name, '/', 2), false)
+        or coalesce(a.data->'fotosProblema' ? split_part(p_name, '/', 2), false)
+        or jsonb_path_exists(a.data, '$.testes[*].fotos[*] ? (@ == $f)', jsonb_build_object('f', split_part(p_name, '/', 2))))
+  );
+$$;
+
+revoke all on function public.portal_cliente(text) from public;
+revoke all on function public.portal_foto(text) from public;
+grant execute on function public.portal_cliente(text) to anon, authenticated;
+grant execute on function public.portal_foto(text) to anon, authenticated;
+
+drop policy if exists "fotos do portal" on storage.objects;
+create policy "fotos do portal" on storage.objects for select to anon
+  using (bucket_id = 'fotos' and public.portal_foto(name));
