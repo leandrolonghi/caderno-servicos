@@ -1,10 +1,33 @@
 -- Portal do cliente: cole tudo no Supabase em SQL Editor > New query e clique em Run (uma vez).
 -- Cada cliente recebe um link próprio e vê só as OS dele: a que está em andamento e o histórico.
 -- Aparecem situação, datas, máquina, falha, causa, solução, testes, cuidados, fotos e horários.
--- Valores, materiais, CPF, telefone e assinatura não aparecem.
+-- O valor total aparece só depois que a OS está finalizada.
+-- Valores por item, materiais, CPF, telefone e assinatura não aparecem.
 -- Sem o código do link nada é mostrado.
 
 drop function if exists public.portal_os(text);
+
+-- Lê um número guardado como número ou texto ("1,5"); o que não for número vale 0
+create or replace function public.portal_num(j jsonb) returns numeric
+language plpgsql immutable as $$
+begin
+  if jsonb_typeof(j) = 'number' then return (j #>> '{}')::numeric; end if;
+  if jsonb_typeof(j) = 'string' then return replace(j #>> '{}', ',', '.')::numeric; end if;
+  return 0;
+exception when others then return 0;
+end $$;
+
+-- Mesmo cálculo do app: materiais + horas × valor da hora + km × valor do km
+-- (OS faturada usa os valores congelados nela; as outras, os valores atuais de Ajustes)
+create or replace function public.portal_total(a jsonb, cfg jsonb) returns numeric
+language sql immutable as $$
+  select round(
+    coalesce((select sum(public.portal_num(p->'qtd') * public.portal_num(p->'valor'))
+              from jsonb_array_elements(jsonb_path_query_array(a, '$.pecas[*]')) p), 0)
+    + public.portal_num(a->'horas') * public.portal_num(case when a->>'status' = 'faturado' and a ? 'valorHora' and a->'valorHora' <> 'null' then a->'valorHora' else cfg->'valorHora' end)
+    + public.portal_num(a->'km') * public.portal_num(case when a->>'status' = 'faturado' and a ? 'valorHora' and a->'valorHora' <> 'null' then a->'valorKm' else cfg->'valorKm' end),
+  2);
+$$;
 
 create index if not exists docs_portal on public.docs ((data->>'portal')) where col = 'clientes';
 
@@ -24,6 +47,7 @@ language sql stable security definer set search_path = public as $$
                    from jsonb_array_elements(jsonb_path_query_array(a.data, '$.testes[*]')) t),
         'apontamentos', (select coalesce(jsonb_agg(jsonb_build_object('tipo', x->'tipo', 'ini', x->'ini', 'fim', x->'fim', 'motivo', x->'motivo')), '[]')
                          from jsonb_array_elements(jsonb_path_query_array(a.data, '$.apontamentos[*]')) x),
+        'total', case when a.data->>'status' in ('concluido', 'faturado') then public.portal_total(a.data, coalesce(g.data, '{}')) end,
         'maquina', nullif(concat_ws(' ', m.data->>'tipo', m.data->>'marca', m.data->>'modelo'), ''), 'serie', m.data->'serie'
       ) order by a.data->>'data' desc, a.data->'numero' desc nulls last), '[]')
       from public.docs a

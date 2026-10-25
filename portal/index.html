@@ -50,6 +50,9 @@ footer{font-size:13px;color:var(--muted)}
 .cardtop{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
 .clip{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .st.sm{font-size:14px;margin-top:2px}.st.sm::before{width:9px;height:9px}
+.num{font-variant-numeric:tabular-nums}
+.total{display:flex;justify-content:space-between;align-items:baseline;gap:12px;background:var(--surface);border-radius:12px;padding:14px}
+.total b{font-size:22px;font-weight:600}
 .voltar{color:var(--muted);text-decoration:none;font-weight:600;font-size:15px;margin-bottom:-10px}
 </style></head><body>
 <header><div class="wrap"><img src="../icons/icon-192.png" alt=""><b id="empresa">Minhas OS</b></div></header>
@@ -92,6 +95,7 @@ const osNome = o => o.numero ? 'OS ' + String(o.numero).padStart(4, '0') : 'Orde
 const ativa = o => !['concluido', 'faturado'].includes(o.status);
 const pausaDe = o => o.status === 'pausada' ? [...(o.apontamentos || [])].sort((a, b) => b.ini - a.ini).find(x => x.tipo === 'pausa' && !x.fim) : null;
 const stTxt = o => { const l = STATUS[o.status] || o.status || '', p = pausaDe(o); return p?.motivo ? `${l}: ${p.motivo}` : l; };
+const brl = v => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const zap = (tel, msg) => { const t = String(tel || '').replace(/\D/g, ''); return t ? el('section', {}, el('a', { class: 'btn', href: `https://wa.me/${t.length <= 11 ? '55' + t : t}?text=${encodeURIComponent(msg)}`, target: '_blank', rel: 'noopener' }, 'Falar no WhatsApp')) : null; };
 
 function cartao(o) {
@@ -99,7 +103,7 @@ function cartao(o) {
     el('div', { class: 'cardtop' }, el('b', {}, osNome(o)), el('span', { class: 'muted small' }, fmtDate(o.data))),
     o.maquina && el('div', { class: 'small' }, o.maquina),
     o.falha && el('div', { class: 'small muted clip' }, o.falha),
-    el('span', { class: 'st sm', style: `--c:${COR[o.status] || 'var(--muted)'}` }, stTxt(o)));
+    el('div', { class: 'cardtop' }, el('span', { class: 'st sm', style: `--c:${COR[o.status] || 'var(--muted)'}` }, stTxt(o)), o.total != null && el('span', { class: 'small num' }, brl(o.total))));
 }
 
 function lista(d) {
@@ -135,6 +139,7 @@ function detalhe(d, o) {
     testes.length ? el('section', {}, el('h2', {}, 'Testes realizados'), testes.map(t => el('div', { class: 'teste' }, t.desc ? el('p', {}, t.desc) : null, fotos(t.fotos)))) : null,
     bloco('Fotos do serviço', '', o.fotos),
     bloco('Cuidados', o.cuidados),
+    o.total != null ? el('section', { class: 'total' }, el('span', {}, 'Valor total'), el('b', { class: 'num' }, brl(o.total))) : null,
     ap.length ? el('section', {}, el('h2', {}, 'Horários'), el('div', { class: 'hist' },
       ap.map(x => el('div', {}, el('span', {}, x.tipo === 'pausa' ? `Pausado${x.motivo ? ': ' + x.motivo : ''}` : TIPO[x.tipo] || x.tipo), el('span', {}, x.tipo === 'pausa' ? quando(x.ini) : periodo(x)))))) : null,
     o.assinadoEm ? el('p', { class: 'small muted' }, `Serviço conferido e assinado em ${quando(o.assinadoEm)}.`) : null,
