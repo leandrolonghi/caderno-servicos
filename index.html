@@ -912,9 +912,8 @@ function openSvc(id, preset = {}) {
   const a = id ? atend[id] : { data: today(), status: 'aberto', tipo: '', valorHora: cfg.valorHora, valorKm: cfg.valorKm, ...preset };
   $('#svcTitle').textContent = id ? (osLabel(a) || 'Atendimento') : 'Nova OS';
   apont = (a.apontamentos || []).map(x => ({ ...x }));
-  // com um grupo só, ele já entra na OS nova; com vários, você escolhe na aba Checklist
-  chk = id && (a.checklist || []).length ? a.checklist.map(x => ({ ...x, grupo: x.grupo || '', obs: x.obs || '', fotos: [...(x.fotos || [])] }))
-    : chkGrupos().length === 1 ? pontosDe(chkGrupos()[0]) : [];
+  // a OS nova abre sem checklist: você vincula o que quiser na aba Checklist
+  chk = id ? (a.checklist || []).map(x => ({ ...x, grupo: x.grupo || '', obs: x.obs || '', fotos: [...(x.fotos || [])] })) : [];
   sig = a.assinatura || null; pausePick = false; kmPick = null; apEdit = null;
   idFotos = { fotoHorimetro: a.fotoHorimetro || null, fotoChassi: a.fotoChassi || null };
   fillClientSelect($('#sCliente'), a.clienteId, 'Escolha o cliente');
