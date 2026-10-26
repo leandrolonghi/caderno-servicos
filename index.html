@@ -599,10 +599,16 @@ const AP_TXT = { deslocamento: 'Deslocamento', trabalho: 'Atendimento', pausa: '
 // grupos de checklist: { id, nome, itens: [{ item, foto }] } (foto de referência do componente)
 // versões antigas tinham uma lista só (checklistItens, às vezes só texto): vira o grupo "Checklist"
 const ptNorm = x => typeof x === 'string' ? { item: x, foto: null } : { item: x.item || '', foto: x.foto || null };
-const chkGrupos = () => Array.isArray(cfg.checklistGrupos) ? cfg.checklistGrupos.map(g => ({ id: g.id, nome: g.nome || '', itens: (g.itens || []).map(ptNorm) }))
-  : Array.isArray(cfg.checklistItens) && cfg.checklistItens.length ? [{ id: 'geral', nome: 'Checklist', itens: cfg.checklistItens.map(ptNorm) }] : [];
-const chkRef = x => x.ref || chkGrupos().flatMap(g => g.itens).find(t => t.item === x.item)?.foto || null;
-const pontosDe = g => g.itens.map(t => ({ grupo: g.nome, item: t.item, ref: t.foto, estado: '', obs: '', fotos: [] }));
+// grupo principal (ex.: a máquina) › subgrupos (ex.: Verificação elétrica pré-plantio) › pontos;
+// grupos de antes dos subgrupos tinham os pontos direto: eles viram o subgrupo "Geral"
+const subNorm = s => ({ id: s.id, nome: s.nome || '', itens: (s.itens || []).map(ptNorm) });
+const chkGrupos = () => (Array.isArray(cfg.checklistGrupos) ? cfg.checklistGrupos
+  : Array.isArray(cfg.checklistItens) && cfg.checklistItens.length ? [{ id: 'geral', nome: 'Checklist', itens: cfg.checklistItens }] : [])
+  .map(g => ({ id: g.id, nome: g.nome || '', subs: Array.isArray(g.subs) ? g.subs.map(subNorm) : (g.itens || []).length ? [{ id: g.id + '-geral', nome: 'Geral', itens: g.itens.map(ptNorm) }] : [] }));
+const chkRef = x => x.ref || chkGrupos().flatMap(g => g.subs.flatMap(s => s.itens)).find(t => t.item === x.item)?.foto || null;
+// na OS o ponto guarda "Principal › Subgrupo" (é o título que aparece na OS, no PDF e no portal)
+const grupoNome = (g, s) => `${g.nome} › ${s.nome}`;
+const pontosDe = (g, s) => s.itens.map(t => ({ grupo: grupoNome(g, s), item: t.item, ref: t.foto, estado: '', obs: '', fotos: [] }));
 const motivos = () => Array.isArray(cfg.motivosPausa) ? cfg.motivosPausa : MOTIVOS;
 const MOTIVOS = ['Almoço / refeição', 'Aguardando peça', 'Chuva / clima', 'Aguardando cliente ou operador', 'Buscar peça / material', 'Máquina em operação'];
 // LGPD: no PDF o CPF sai mascarado (CNPJ é dado da empresa e sai completo)
@@ -896,6 +902,7 @@ $('#btnDelCli').onclick = async e => {
 $('#btnNewClient').onclick = () => openCli(null);
 
 /* ---------- Ficha de atendimento ---------- */
+let chkPick = null; // grupo principal aberto para escolher o subgrupo na aba Checklist
 let editingSvc = null, parts = [], photos = [], apont = [], chk = [], sig = null, tick = null, pausePick = false, kmPick = null, idFotos = {}, apEdit = null, fotosProb = [], testes = [];
 function fillClientSelect(sel, value, placeholder) {
   sel.replaceChildren(el('option', { value: '' }, placeholder));
@@ -914,7 +921,7 @@ function openSvc(id, preset = {}) {
   apont = (a.apontamentos || []).map(x => ({ ...x }));
   // a OS nova abre sem checklist: você vincula o que quiser na aba Checklist
   chk = id ? (a.checklist || []).map(x => ({ ...x, grupo: x.grupo || '', obs: x.obs || '', fotos: [...(x.fotos || [])] })) : [];
-  sig = a.assinatura || null; pausePick = false; kmPick = null; apEdit = null;
+  sig = a.assinatura || null; chkPick = null; pausePick = false; kmPick = null; apEdit = null;
   idFotos = { fotoHorimetro: a.fotoHorimetro || null, fotoChassi: a.fotoChassi || null };
   fillClientSelect($('#sCliente'), a.clienteId, 'Escolha o cliente');
   fillMachSelect(a.clienteId, a.maquinaId);
@@ -1190,10 +1197,15 @@ const Local = (() => {
 function renderChk() {
   svcAuto.kick();
   const box = $('#chkBox'); box.replaceChildren();
+  // vincular: toca no grupo principal e depois no subgrupo
   const usados = new Set(chk.map(x => x.grupo || ''));
-  const falta = chkGrupos().filter(g => g.nome && !usados.has(g.nome) && g.itens.length);
-  if (falta.length) box.append(el('div', { class: 'grupos-add' }, ...falta.map(g => el('button', { type: 'button', onclick: () => { chk.push(...pontosDe(g)); renderChk(); } }, '+ ' + g.nome))));
-  if (!chk.length && !falta.length) box.append(el('div', { class: 'small muted' }, 'Sem pontos. Cadastre os checklists em Ajustes › Checklist ou adicione abaixo.'));
+  const gs = chkGrupos().map(g => ({ ...g, subs: g.subs.filter(s => s.itens.length && !usados.has(grupoNome(g, s))) })).filter(g => g.subs.length);
+  const aberto = gs.find(g => g.id === chkPick);
+  if (aberto) box.append(el('div', { class: 'grupos-add' },
+    el('button', { type: 'button', class: 'ghost', 'aria-label': 'Voltar aos grupos', onclick: () => { chkPick = null; renderChk(); } }, '‹ ' + aberto.nome),
+    ...aberto.subs.map(sb => el('button', { type: 'button', onclick: () => { chk.push(...pontosDe(aberto, sb)); chkPick = null; renderChk(); } }, '+ ' + sb.nome))));
+  else if (gs.length) box.append(el('div', { class: 'grupos-add' }, ...gs.map(g => el('button', { type: 'button', onclick: () => { chkPick = g.id; renderChk(); } }, g.nome + ' ›'))));
+  if (!chk.length && !gs.length) box.append(el('div', { class: 'small muted' }, 'Sem pontos. Cadastre os checklists em Ajustes › Checklist ou adicione abaixo.'));
   const ordem = [...new Set(chk.map(x => x.grupo || ''))];
   const variosGrupos = ordem.length > 1 || ordem[0];
   ordem.forEach(gn => {
@@ -1852,33 +1864,49 @@ $('#btnTipoAdd').onclick = () => {
   store.doc('config/geral').set({ ...cfg, tiposServico: [...tipos(), v] }); $('#tipoNew').value = '';
 };
 $('#tipoNew').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#btnTipoAdd').click(); } });
-let grupoCfg = null, focoNovo = false; // grupo aberto em Ajustes › Checklist
+let grupoCfg = null, subCfg = null, focoNovo = false; // grupo e subgrupo abertos em Ajustes › Checklist
 function renderChkCfg() {
   const box = $('#chkCfgBox'); if (!box) return;
   const gs = chkGrupos(), salvar = lista => store.doc('config/geral').set({ ...cfg, checklistGrupos: lista });
+  const chev = () => (t => (t.innerHTML = '<svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg>', t.content.firstChild))(document.createElement('template'));
+  const qtd = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+  // lista com "abrir" + campo para criar um novo
+  const listaNomes = (itens, conta, abrir, vazio, ph, rotulo, criar) => {
+    const novo = el('input', { placeholder: ph, style: 'flex:1;min-width:180px' });
+    const add = () => { const v = novo.value.trim(); if (!v) return toast('Escreva o nome'); if (itens.some(x => x.nome === v)) return toast('Esse nome já existe'); criar(v); };
+    novo.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+    return [itens.length ? el('div', { class: 'ajlist' }, ...itens.map(x => el('button', { type: 'button', class: 'ajitem', onclick: () => abrir(x) },
+        el('span', {}, el('b', {}, x.nome), el('span', { class: 'small muted' }, conta(x))), chev())))
+      : el('div', { class: 'small muted' }, vazio),
+      el('div', { class: 'row' }, novo, el('button', { type: 'button', onclick: add }, rotulo))];
+  };
+  const nomeCampo = (rot, atual, mudarNome) => el('label', { class: 'f' }, rot, el('input', { value: atual, onchange: e => { const v = e.target.value.trim(); if (!v) { e.target.value = atual; return; } mudarNome(v); } }));
+  const voltar = (txt, fn) => el('button', { type: 'button', class: 'ghost ajback', onclick: () => { fn(); renderChkCfg(); } }, '‹ ' + txt);
   const g = gs.find(x => x.id === grupoCfg);
   if (!g) {
-    grupoCfg = null;
-    const novo = el('input', { id: 'grupoNew', placeholder: 'Novo checklist, ex.: Revisão trator', style: 'flex:1;min-width:180px' });
-    const add = () => {
-      const v = novo.value.trim(); if (!v) return toast('Escreva o nome do checklist');
-      if (gs.some(x => x.nome === v)) return toast('Esse checklist já existe');
-      grupoCfg = newId(); salvar([...gs, { id: grupoCfg, nome: v, itens: [] }]);
-    };
-    novo.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+    grupoCfg = subCfg = null;
     box.replaceChildren(
-      el('p', { class: 'small muted', style: 'margin:0' }, 'Cada checklist tem seus pontos de inspeção. Na OS você escolhe quais usar.'),
-      gs.length ? el('div', { class: 'ajlist' }, ...gs.map(x => el('button', { type: 'button', class: 'ajitem', onclick: () => { grupoCfg = x.id; renderChkCfg(); } },
-        el('span', {}, el('b', {}, x.nome), el('span', { class: 'small muted' }, `${x.itens.length} ponto${x.itens.length === 1 ? '' : 's'}`)),
-        (t => (t.innerHTML = '<svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg>', t.content.firstChild))(document.createElement('template')))))
-        : el('div', { class: 'small muted' }, 'Nenhum checklist cadastrado.'),
-      el('div', { class: 'row' }, novo, el('button', { type: 'button', onclick: add }, '+ Checklist')));
+      el('p', { class: 'small muted', style: 'margin:0' }, 'Grupo principal (ex.: a máquina) com subgrupos de verificação. Na OS você escolhe o grupo e o subgrupo.'),
+      ...listaNomes(gs, x => ' · ' + qtd(x.subs.length, 'subgrupo', 'subgrupos'), x => { grupoCfg = x.id; renderChkCfg(); }, 'Nenhum grupo cadastrado.',
+        'Novo grupo, ex.: Maestro Evolution 39 linhas', '+ Grupo', v => { grupoCfg = newId(); salvar([...gs, { id: grupoCfg, nome: v, subs: [] }]); }));
     return;
   }
-  const mudar = fn => salvar(chkGrupos().map(x => x.id === g.id ? fn(x) : x));
+  const mudarG = fn => salvar(chkGrupos().map(x => x.id === g.id ? fn(x) : x));
+  const sb = g.subs.find(x => x.id === subCfg);
+  if (!sb) {
+    subCfg = null;
+    box.replaceChildren(voltar('Grupos', () => { grupoCfg = null; }),
+      nomeCampo('Grupo principal', g.nome, v => mudarG(x => ({ ...x, nome: v }))),
+      el('b', {}, 'Subgrupos'),
+      ...listaNomes(g.subs, x => ' · ' + qtd(x.itens.length, 'ponto', 'pontos'), x => { subCfg = x.id; renderChkCfg(); }, 'Nenhum subgrupo ainda.',
+        'Novo subgrupo, ex.: Verificação elétrica pré-plantio', '+ Subgrupo', v => { subCfg = newId(); mudarG(x => ({ ...x, subs: [...x.subs, { id: subCfg, nome: v, itens: [] }] })); }),
+      el('button', { type: 'button', class: 'danger', style: 'align-self:flex-start', onclick: () => { if (confirm(`Apagar o grupo "${g.nome}" e todos os subgrupos dele? As OS que já usaram continuam com os pontos.`)) { grupoCfg = null; salvar(chkGrupos().filter(x => x.id !== g.id)); } } }, 'Apagar grupo'));
+    return;
+  }
+  const mudar = fn => mudarG(x => ({ ...x, subs: x.subs.map(y => y.id === sb.id ? fn(y) : y) }));
   const lista = el('div', { class: 'list' });
-  if (!g.itens.length) lista.append(el('div', { class: 'small muted' }, 'Nenhum ponto ainda.'));
-  g.itens.forEach((m, i) => {
+  if (!sb.itens.length) lista.append(el('div', { class: 'small muted' }, 'Nenhum ponto ainda.'));
+  sb.itens.forEach((m, i) => {
     const inId = 'ckref_' + i;
     const trocar = async e => {
       const f = e.target.files[0]; if (!f) return;
@@ -1895,17 +1923,16 @@ function renderChkCfg() {
   const novo = el('input', { id: 'chkCfgNew', placeholder: 'Novo ponto, ex.: Correia do ventilador', style: 'flex:1;min-width:180px' });
   const add = () => {
     const v = novo.value.trim(); if (!v) return toast('Escreva o ponto');
-    if (g.itens.some(t => t.item === v)) return toast('Esse ponto já existe');
+    if (sb.itens.some(t => t.item === v)) return toast('Esse ponto já existe');
     focoNovo = true; mudar(x => ({ ...x, itens: [...x.itens, { item: v, foto: null }] }));
   };
   novo.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
-  box.replaceChildren(
-    el('button', { type: 'button', class: 'ghost ajback', onclick: () => { grupoCfg = null; renderChkCfg(); } }, '‹ Checklists'),
-    el('label', { class: 'f', for: 'grupoNome' }, 'Nome do checklist', el('input', { id: 'grupoNome', value: g.nome, onchange: e => { const v = e.target.value.trim(); if (!v) { e.target.value = g.nome; return; } mudar(x => ({ ...x, nome: v })); } })),
+  box.replaceChildren(voltar(g.nome, () => { subCfg = null; }),
+    nomeCampo('Subgrupo', sb.nome, v => mudar(x => ({ ...x, nome: v }))),
     el('p', { class: 'small muted', style: 'margin:0' }, 'Toque na foto para mostrar qual é o componente.'),
     lista,
     el('div', { class: 'row' }, novo, el('button', { type: 'button', onclick: add }, '+ Ponto')),
-    el('button', { type: 'button', class: 'danger', style: 'align-self:flex-start', onclick: () => { if (confirm(`Apagar o checklist "${g.nome}"? As OS que já usaram continuam com os pontos.`)) { grupoCfg = null; salvar(chkGrupos().filter(x => x.id !== g.id)); } } }, 'Apagar checklist'));
+    el('button', { type: 'button', class: 'danger', style: 'align-self:flex-start', onclick: () => { if (confirm(`Apagar o subgrupo "${sb.nome}"? As OS que já usaram continuam com os pontos.`)) { subCfg = null; mudarG(x => ({ ...x, subs: x.subs.filter(y => y.id !== sb.id) })); } } }, 'Apagar subgrupo'));
   if (focoNovo) { focoNovo = false; novo.focus(); }
 }
 function renderCfg() {
@@ -1915,7 +1942,7 @@ function renderCfg() {
   qt('valores', `Hora ${brl(cfg.valorHora || 0)} · km ${brl(cfg.valorKm || 0)}`);
   qt('tipos', tipos().length + ' tipos');
   qt('motivos', motivos().length + ' motivos');
-  qt('checklist', chkGrupos().length ? chkGrupos().length + ' checklist' + (chkGrupos().length > 1 ? 's' : '') : 'Nenhum checklist');
+  qt('checklist', chkGrupos().length ? chkGrupos().length + (chkGrupos().length > 1 ? ' grupos' : ' grupo') : 'Nenhum grupo');
   qt('backup', 'Planilha ou cópia completa');
   const put = (sel, v) => { if (document.activeElement !== $(sel)) $(sel).value = v; };
   put('#cfgNome', cfg.nome || ''); put('#cfgCnpj', cfg.cnpj || ''); put('#cfgTel', cfg.telefone || ''); put('#cfgEmail', cfg.email || ''); put('#cfgEnd', cfg.endereco || ''); put('#cfgHora', cfg.valorHora || ''); put('#cfgKm', cfg.valorKm || '');
@@ -1926,7 +1953,7 @@ const cfgAuto = autosaver(async () => { await store.doc('config/geral').set({ ..
 $('#cfgForm').addEventListener('submit', e => { e.preventDefault(); cfgAuto.flush(); });
 document.querySelectorAll('#cfgForm input[id^="cfg"]').forEach(i => i.addEventListener('input', () => cfgAuto.kick()));
 function showAj(k) {
-  if (k === 'checklist') { grupoCfg = null; renderChkCfg(); }
+  if (k === 'checklist') { grupoCfg = subCfg = null; renderChkCfg(); }
   $('#ajMenu').hidden = !!k;
   document.querySelectorAll('.ajpanel').forEach(p => p.hidden = p.dataset.aj !== k);
   window.scrollTo(0, 0);
