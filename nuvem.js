@@ -158,6 +158,13 @@ window.Nuvem = {
     const { data, error } = await sb.rpc('portal_definir_acesso', { p_cliente: clienteId, p_login: login, p_senha: senha, p_id: id || null });
     if (error) throw /fetch|network/i.test(error.message) ? 'Sem conexão. Tente de novo quando tiver sinal.' : error.message; return data;
   },
+  /* posição do técnico para o portal (uma linha por OS em andamento) */
+  async posicao(p) {
+    if (!sb || !user) throw 'sem_login';
+    const em = new Date(p.em).toISOString();
+    const { error } = await sb.from('portal_posicao').upsert(p.ids.map(os_id => ({ owner: user.id, os_id, lat: p.lat, lng: p.lng, precisao: p.precisao, em })), { onConflict: 'owner,os_id' });
+    if (error) throw error;
+  },
   async removerAcesso(id) {
     if (!sb || !user) throw 'Entre na sua conta';
     const { error } = await sb.rpc('portal_remover_acesso', { p_id: id });
