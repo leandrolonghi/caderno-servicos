@@ -219,7 +219,7 @@ begin
         'materiais', (select coalesce(jsonb_agg(jsonb_build_object('desc', p->'desc', 'qtd', p->'qtd',
                         'valor', case when fin then public.portal_num(p->'valor') end)), '[]')
                       from jsonb_array_elements(jsonb_path_query_array(a.data, '$.pecas[*]')) p),
-        'checklist', (select coalesce(jsonb_agg(jsonb_build_object('item', k->'item', 'estado', k->'estado', 'obs', k->'obs',
+        'checklist', (select coalesce(jsonb_agg(jsonb_build_object('grupo', k->'grupo', 'item', k->'item', 'estado', k->'estado', 'obs', k->'obs',
                         'fotos', jsonb_path_query_array(k, '$.fotos[*]'))), '[]')
                       from jsonb_array_elements(jsonb_path_query_array(a.data, '$.checklist[*]')) k
                       where coalesce(k->>'estado', '') <> '' or coalesce(k->>'obs', '') <> '' or jsonb_path_exists(k, '$.fotos[*]')),
