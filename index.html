@@ -177,6 +177,11 @@ nav.tabs svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2
 .ref{position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:var(--bg);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
 .ref img{width:100%;height:100%;object-fit:cover;display:block}
 .ref .camico{opacity:.55}
+.grupo-h{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px}
+.grupo-h b{font-size:15px}
+.grupo-h button{min-height:32px;padding:0 10px;font-size:13px}
+.grupos-add{display:flex;gap:6px;flex-wrap:wrap}
+.grupos-add button{min-height:40px}
 .pontocfg{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
 .pontocfg>.ref{width:56px;height:56px}
 .verfoto{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:12px}
@@ -410,9 +415,7 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
       <div class="row"><input id="motivoNew" placeholder="Novo motivo, ex.: Abastecimento" style="flex:1;min-width:180px"><button type="button" id="btnMotivoAdd">+ Motivo</button></div>
     </div>
     <div class="ajpanel" data-aj="checklist" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Checklist</h2>
-      <p class="small muted" style="margin:0">Pontos de inspeção de toda OS nova. Toque na foto para mostrar qual é o componente.</p>
-      <div class="list" id="chkCfgList"></div>
-      <div class="row"><input id="chkCfgNew" placeholder="Novo ponto, ex.: Correia do ventilador" style="flex:1;min-width:180px"><button type="button" id="btnChkCfgAdd">+ Ponto</button></div>
+      <div id="chkCfgBox" style="display:flex;flex-direction:column;gap:12px"></div>
     </div>
     <div class="ajpanel" data-aj="conta" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Conta</h2>
       <p style="margin:0" id="contaEmail"></p>
@@ -593,8 +596,13 @@ const EST_LBL = { ok: 'OK', nok: 'Não OK', atencao: 'Atenção', trocado: 'Troc
 const EST_TXT = { ok: '✔ OK', nok: '✖ Não OK', atencao: '⚠ Atenção', trocado: '🔧 Trocado', na: 'N/A' };
 const AP_TXT = { deslocamento: 'Deslocamento', trabalho: 'Atendimento', pausa: 'Pausa' };
 // pontos de inspeção: { item, foto } (foto de referência do componente); versões antigas guardavam só o texto
-const chkItens = () => (Array.isArray(cfg.checklistItens) ? cfg.checklistItens : []).map(x => typeof x === 'string' ? { item: x, foto: null } : { item: x.item || '', foto: x.foto || null });
-const chkRef = x => x.ref || chkItens().find(t => t.item === x.item)?.foto || null;
+// grupos de checklist: { id, nome, itens: [{ item, foto }] } (foto de referência do componente)
+// versões antigas tinham uma lista só (checklistItens, às vezes só texto): vira o grupo "Checklist"
+const ptNorm = x => typeof x === 'string' ? { item: x, foto: null } : { item: x.item || '', foto: x.foto || null };
+const chkGrupos = () => Array.isArray(cfg.checklistGrupos) ? cfg.checklistGrupos.map(g => ({ id: g.id, nome: g.nome || '', itens: (g.itens || []).map(ptNorm) }))
+  : Array.isArray(cfg.checklistItens) && cfg.checklistItens.length ? [{ id: 'geral', nome: 'Checklist', itens: cfg.checklistItens.map(ptNorm) }] : [];
+const chkRef = x => x.ref || chkGrupos().flatMap(g => g.itens).find(t => t.item === x.item)?.foto || null;
+const pontosDe = g => g.itens.map(t => ({ grupo: g.nome, item: t.item, ref: t.foto, estado: '', obs: '', fotos: [] }));
 const motivos = () => Array.isArray(cfg.motivosPausa) ? cfg.motivosPausa : MOTIVOS;
 const MOTIVOS = ['Almoço / refeição', 'Aguardando peça', 'Chuva / clima', 'Aguardando cliente ou operador', 'Buscar peça / material', 'Máquina em operação'];
 // LGPD: no PDF o CPF sai mascarado (CNPJ é dado da empresa e sai completo)
@@ -904,8 +912,9 @@ function openSvc(id, preset = {}) {
   const a = id ? atend[id] : { data: today(), status: 'aberto', tipo: '', valorHora: cfg.valorHora, valorKm: cfg.valorKm, ...preset };
   $('#svcTitle').textContent = id ? (osLabel(a) || 'Atendimento') : 'Nova OS';
   apont = (a.apontamentos || []).map(x => ({ ...x }));
-  chk = id && (a.checklist || []).some(x => x.estado || x.obs || x.fotos?.length) ? a.checklist.map(x => ({ ...x, obs: x.obs || '', fotos: [...(x.fotos || [])] }))
-    : chkItens().map(t => ({ item: t.item, ref: t.foto, estado: '', obs: '', fotos: [] }));
+  // com um grupo só, ele já entra na OS nova; com vários, você escolhe na aba Checklist
+  chk = id && (a.checklist || []).length ? a.checklist.map(x => ({ ...x, grupo: x.grupo || '', obs: x.obs || '', fotos: [...(x.fotos || [])] }))
+    : chkGrupos().length === 1 ? pontosDe(chkGrupos()[0]) : [];
   sig = a.assinatura || null; pausePick = false; kmPick = null; apEdit = null;
   idFotos = { fotoHorimetro: a.fotoHorimetro || null, fotoChassi: a.fotoChassi || null };
   fillClientSelect($('#sCliente'), a.clienteId, 'Escolha o cliente');
@@ -1179,8 +1188,19 @@ const Local = (() => {
 function renderChk() {
   svcAuto.kick();
   const box = $('#chkBox'); box.replaceChildren();
-  if (!chk.length) box.append(el('div', { class: 'small muted' }, 'Sem pontos. Cadastre em Ajustes › Checklist ou adicione abaixo.'));
-  chk.forEach((x, i) => {
+  const usados = new Set(chk.map(x => x.grupo || ''));
+  const falta = chkGrupos().filter(g => g.nome && !usados.has(g.nome) && g.itens.length);
+  if (falta.length) box.append(el('div', { class: 'grupos-add' }, ...falta.map(g => el('button', { type: 'button', onclick: () => { chk.push(...pontosDe(g)); renderChk(); } }, '+ ' + g.nome))));
+  if (!chk.length && !falta.length) box.append(el('div', { class: 'small muted' }, 'Sem pontos. Cadastre os checklists em Ajustes › Checklist ou adicione abaixo.'));
+  const ordem = [...new Set(chk.map(x => x.grupo || ''))];
+  const variosGrupos = ordem.length > 1 || ordem[0];
+  ordem.forEach(gn => {
+  if (variosGrupos) box.append(el('div', { class: 'grupo-h' }, el('b', {}, gn || 'Outros pontos'),
+    el('button', { type: 'button', class: 'ghost', 'aria-label': 'Tirar ' + (gn || 'outros pontos') + ' da OS', onclick: () => {
+      const marcados = chk.some(x => (x.grupo || '') === gn && (x.estado || x.obs || x.fotos.length));
+      if (marcados && !confirm(`Tirar "${gn || 'Outros pontos'}" desta OS? O que foi marcado nele será apagado.`)) return;
+      chk = chk.filter(x => (x.grupo || '') !== gn); renderChk(); } }, 'Tirar')));
+  chk.forEach((x, i) => { if ((x.grupo || '') !== gn) return;
     const ref = chkRef(x);
     const addFotos = async e => {
       const files = [...e.target.files]; if (!files.length) return;
@@ -1205,8 +1225,9 @@ function renderChk() {
       el('button', { type: 'button', 'aria-label': 'Remover foto', onclick: () => { x.fotos.splice(j, 1); renderChk(); } }, '×')))));
     box.append(p);
   });
+  });
 }
-$('#btnChkAdd').onclick = () => { const v = $('#chkNew').value.trim(); if (!v) return; chk.push({ item: v, estado: '', obs: '', fotos: [] }); $('#chkNew').value = ''; renderChk(); };
+$('#btnChkAdd').onclick = () => { const v = $('#chkNew').value.trim(); if (!v) return; chk.push({ grupo: '', item: v, estado: '', obs: '', fotos: [] }); $('#chkNew').value = ''; renderChk(); };
 $('#chkNew').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#btnChkAdd').click(); } });
 // foto em tela cheia (toque para fechar)
 function verFoto(id, legenda) {
@@ -1430,7 +1451,7 @@ async function saveSvc(close, silent) {
     testes: testes.filter(x => x.desc.trim() || x.fotos.length).map(x => ({ desc: x.desc.trim(), fotos: x.fotos })),
     descricao: $('#sDesc').value.trim(), recomendacao: $('#sObsCli').value.trim(),
     pecas: parts.filter(p => (p.desc || '').trim() || n(p.valor)).map(p => ({ desc: (p.desc || '').trim(), qtd: n(p.qtd), valor: n(p.valor) })),
-    fotos: photos, fotoHorimetro: idFotos.fotoHorimetro, fotoChassi: idFotos.fotoChassi, apontamentos: apont, checklist: chk.map(x => ({ item: x.item, ref: chkRef(x), estado: x.estado || '', obs: (x.obs || '').trim(), fotos: x.fotos || [] })), assinatura: sig, atualizadoEm: Date.now() };
+    fotos: photos, fotoHorimetro: idFotos.fotoHorimetro, fotoChassi: idFotos.fotoChassi, apontamentos: apont, checklist: chk.map(x => ({ grupo: x.grupo || '', item: x.item, ref: chkRef(x), estado: x.estado || '', obs: (x.obs || '').trim(), fotos: x.fotos || [] })), assinatura: sig, atualizadoEm: Date.now() };
   if (!prev.criadoEm) data.criadoEm = Date.now();
   if (!prev.numero) data.numero = Math.max(0, ...Object.values(atend).map(a => a.numero || 0)) + 1;
   if (data.status === 'faturado' && !prev.faturadoEm) data.faturadoEm = Date.now();
@@ -1709,10 +1730,13 @@ async function buildPdf(a) {
   const ck = (a.checklist || []).filter(x => x.estado || x.obs || (x.fotos || []).length);
   if (ck.length) {
     heading('Checklist de inspeção');
-    table(['Ponto inspecionado', 'Situação', 'Observação'], ck.map(x => [x.item, EST_LBL[x.estado] || '—', x.obs || '']), {
+    // com mais de um grupo, cada um ganha uma linha de título na tabela
+    const gs = [...new Set(ck.map(x => x.grupo || ''))], linhas = [];
+    for (const gn of gs) { if (gs.length > 1 || gn) linhas.push({ titulo: gn || 'Outros pontos' }); linhas.push(...ck.filter(x => (x.grupo || '') === gn)); }
+    table(['Ponto inspecionado', 'Situação', 'Observação'], linhas.map(x => x.titulo ? [{ content: x.titulo, colSpan: 3, styles: { fontStyle: 'bold', fillColor: [236, 238, 232] } }] : [x.item, EST_LBL[x.estado] || '—', x.obs || '']), {
       columnStyles: { 0: { cellWidth: 62 }, 1: { cellWidth: 24 } },
-      didParseCell: d => { if (d.section === 'body' && d.column.index === 1) { const v = ck[d.row.index].estado; d.cell.styles.fontStyle = 'bold'; d.cell.styles.textColor = v === 'ok' ? [47, 122, 59] : v === 'nok' ? [179, 38, 30] : v === 'atencao' ? [168, 116, 0] : v === 'trocado' ? [44, 95, 138] : MUT; } } });
-    for (const x of ck.filter(x => (x.fotos || []).length)) {
+      didParseCell: d => { if (d.section === 'body' && d.column.index === 1 && !linhas[d.row.index].titulo) { const v = linhas[d.row.index].estado; d.cell.styles.fontStyle = 'bold'; d.cell.styles.textColor = v === 'ok' ? [47, 122, 59] : v === 'nok' ? [179, 38, 30] : v === 'atencao' ? [168, 116, 0] : v === 'trocado' ? [44, 95, 138] : MUT; } } });
+    for (const x of linhas.filter(x => (x.fotos || []).length)) {
       space(58); doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...INK);
       for (const line of doc.splitTextToSize(`${x.item}${EST_LBL[x.estado] ? ' · ' + EST_LBL[x.estado] : ''}`, CW)) { space(5); doc.text(line, M, y); y += 4.5; }
       y += 1;
@@ -1822,32 +1846,62 @@ $('#btnTipoAdd').onclick = () => {
   store.doc('config/geral').set({ ...cfg, tiposServico: [...tipos(), v] }); $('#tipoNew').value = '';
 };
 $('#tipoNew').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#btnTipoAdd').click(); } });
+let grupoCfg = null, focoNovo = false; // grupo aberto em Ajustes › Checklist
 function renderChkCfg() {
-  const box = $('#chkCfgList'); box.replaceChildren();
-  const ms = chkItens();
-  const salvar = lista => store.doc('config/geral').set({ ...cfg, checklistItens: lista });
-  if (!ms.length) box.append(el('div', { class: 'small muted' }, 'Nenhum ponto cadastrado. A OS abre com o checklist vazio.'));
-  ms.forEach((m, i) => {
+  const box = $('#chkCfgBox'); if (!box) return;
+  const gs = chkGrupos(), salvar = lista => store.doc('config/geral').set({ ...cfg, checklistGrupos: lista });
+  const g = gs.find(x => x.id === grupoCfg);
+  if (!g) {
+    grupoCfg = null;
+    const novo = el('input', { id: 'grupoNew', placeholder: 'Novo checklist, ex.: Revisão trator', style: 'flex:1;min-width:180px' });
+    const add = () => {
+      const v = novo.value.trim(); if (!v) return toast('Escreva o nome do checklist');
+      if (gs.some(x => x.nome === v)) return toast('Esse checklist já existe');
+      grupoCfg = newId(); salvar([...gs, { id: grupoCfg, nome: v, itens: [] }]);
+    };
+    novo.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+    box.replaceChildren(
+      el('p', { class: 'small muted', style: 'margin:0' }, 'Cada checklist tem seus pontos de inspeção. Na OS você escolhe quais usar.'),
+      gs.length ? el('div', { class: 'ajlist' }, ...gs.map(x => el('button', { type: 'button', class: 'ajitem', onclick: () => { grupoCfg = x.id; renderChkCfg(); } },
+        el('span', {}, el('b', {}, x.nome), el('span', { class: 'small muted' }, `${x.itens.length} ponto${x.itens.length === 1 ? '' : 's'}`)),
+        (t => (t.innerHTML = '<svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg>', t.content.firstChild))(document.createElement('template')))))
+        : el('div', { class: 'small muted' }, 'Nenhum checklist cadastrado.'),
+      el('div', { class: 'row' }, novo, el('button', { type: 'button', onclick: add }, '+ Checklist')));
+    return;
+  }
+  const mudar = fn => salvar(chkGrupos().map(x => x.id === g.id ? fn(x) : x));
+  const lista = el('div', { class: 'list' });
+  if (!g.itens.length) lista.append(el('div', { class: 'small muted' }, 'Nenhum ponto ainda.'));
+  g.itens.forEach((m, i) => {
     const inId = 'ckref_' + i;
     const trocar = async e => {
       const f = e.target.files[0]; if (!f) return;
       toast('Enviando foto…');
-      try { const id = await uploadImg(await shrink(f)); salvar(chkItens().map((t, j) => j === i ? { ...t, foto: id } : t)); }
+      try { const id = await uploadImg(await shrink(f)); mudar(x => ({ ...x, itens: x.itens.map((t, j) => j === i ? { ...t, foto: id } : t) })); }
       catch (err) { toast('A foto não foi enviada: ' + (err.message || err.code)); }
     };
     const ref = el('label', { class: 'ref', for: inId, title: m.foto ? 'Trocar foto' : 'Foto do componente', 'aria-label': (m.foto ? 'Trocar foto de ' : 'Foto de ') + m.item }, m.foto ? imgOf(m.foto, { alt: m.item, loading: 'lazy' }) : camIco());
-    const nome = el('input', { value: m.item, 'aria-label': 'Descrição do ponto', onchange: e => { const v = e.target.value.trim(); if (!v) { e.target.value = m.item; return; } salvar(chkItens().map((t, j) => j === i ? { ...t, item: v } : t)); } });
-    box.append(el('div', { class: 'pontocfg' }, assets ? ref : el('div', { class: 'ref', style: 'width:56px;height:56px' }, m.foto ? imgOf(m.foto, { alt: m.item }) : ''),
+    const nome = el('input', { value: m.item, 'aria-label': 'Descrição do ponto', onchange: e => { const v = e.target.value.trim(); if (!v) { e.target.value = m.item; return; } mudar(x => ({ ...x, itens: x.itens.map((t, j) => j === i ? { ...t, item: v } : t) })); } });
+    lista.append(el('div', { class: 'pontocfg' }, assets ? ref : el('div', { class: 'ref', style: 'width:56px;height:56px' }, m.foto ? imgOf(m.foto, { alt: m.item }) : ''),
       el('input', { type: 'file', accept: 'image/*', id: inId, hidden: true, onchange: trocar }), nome,
-      el('button', { type: 'button', class: 'danger', 'aria-label': 'Remover ' + m.item, style: 'min-height:36px', onclick: () => { if (confirm(`Remover o ponto "${m.item}"?`)) salvar(ms.filter((_, j) => j !== i)); } }, 'Remover')));
+      el('button', { type: 'button', class: 'danger', 'aria-label': 'Remover ' + m.item, style: 'min-height:36px', onclick: () => { if (confirm(`Remover o ponto "${m.item}"?`)) mudar(x => ({ ...x, itens: x.itens.filter((_, j) => j !== i) })); } }, 'Remover')));
   });
+  const novo = el('input', { id: 'chkCfgNew', placeholder: 'Novo ponto, ex.: Correia do ventilador', style: 'flex:1;min-width:180px' });
+  const add = () => {
+    const v = novo.value.trim(); if (!v) return toast('Escreva o ponto');
+    if (g.itens.some(t => t.item === v)) return toast('Esse ponto já existe');
+    focoNovo = true; mudar(x => ({ ...x, itens: [...x.itens, { item: v, foto: null }] }));
+  };
+  novo.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+  box.replaceChildren(
+    el('button', { type: 'button', class: 'ghost ajback', onclick: () => { grupoCfg = null; renderChkCfg(); } }, '‹ Checklists'),
+    el('label', { class: 'f', for: 'grupoNome' }, 'Nome do checklist', el('input', { id: 'grupoNome', value: g.nome, onchange: e => { const v = e.target.value.trim(); if (!v) { e.target.value = g.nome; return; } mudar(x => ({ ...x, nome: v })); } })),
+    el('p', { class: 'small muted', style: 'margin:0' }, 'Toque na foto para mostrar qual é o componente.'),
+    lista,
+    el('div', { class: 'row' }, novo, el('button', { type: 'button', onclick: add }, '+ Ponto')),
+    el('button', { type: 'button', class: 'danger', style: 'align-self:flex-start', onclick: () => { if (confirm(`Apagar o checklist "${g.nome}"? As OS que já usaram continuam com os pontos.`)) { grupoCfg = null; salvar(chkGrupos().filter(x => x.id !== g.id)); } } }, 'Apagar checklist'));
+  if (focoNovo) { focoNovo = false; novo.focus(); }
 }
-$('#btnChkCfgAdd').onclick = () => {
-  const v = $('#chkCfgNew').value.trim(); if (!v) return toast('Escreva o ponto');
-  if (chkItens().some(t => t.item === v)) return toast('Esse ponto já existe');
-  store.doc('config/geral').set({ ...cfg, checklistItens: [...chkItens(), { item: v, foto: null }] }); $('#chkCfgNew').value = '';
-};
-$('#chkCfgNew').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#btnChkCfgAdd').click(); } });
 function renderCfg() {
   renderMotivos(); renderChkCfg(); renderTiposCfg();
   const qt = (k, t) => { const e = $('#ajSum-' + k); if (e) e.textContent = t; };
@@ -1855,7 +1909,7 @@ function renderCfg() {
   qt('valores', `Hora ${brl(cfg.valorHora || 0)} · km ${brl(cfg.valorKm || 0)}`);
   qt('tipos', tipos().length + ' tipos');
   qt('motivos', motivos().length + ' motivos');
-  qt('checklist', chkItens().length ? chkItens().length + ' pontos' : 'Nenhum ponto');
+  qt('checklist', chkGrupos().length ? chkGrupos().length + ' checklist' + (chkGrupos().length > 1 ? 's' : '') : 'Nenhum checklist');
   qt('backup', 'Planilha ou cópia completa');
   const put = (sel, v) => { if (document.activeElement !== $(sel)) $(sel).value = v; };
   put('#cfgNome', cfg.nome || ''); put('#cfgCnpj', cfg.cnpj || ''); put('#cfgTel', cfg.telefone || ''); put('#cfgEmail', cfg.email || ''); put('#cfgEnd', cfg.endereco || ''); put('#cfgHora', cfg.valorHora || ''); put('#cfgKm', cfg.valorKm || '');
@@ -1866,6 +1920,7 @@ const cfgAuto = autosaver(async () => { await store.doc('config/geral').set({ ..
 $('#cfgForm').addEventListener('submit', e => { e.preventDefault(); cfgAuto.flush(); });
 document.querySelectorAll('#cfgForm input[id^="cfg"]').forEach(i => i.addEventListener('input', () => cfgAuto.kick()));
 function showAj(k) {
+  if (k === 'checklist') { grupoCfg = null; renderChkCfg(); }
   $('#ajMenu').hidden = !!k;
   document.querySelectorAll('.ajpanel').forEach(p => p.hidden = p.dataset.aj !== k);
   window.scrollTo(0, 0);
