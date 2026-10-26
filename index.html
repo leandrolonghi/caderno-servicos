@@ -1074,6 +1074,7 @@ async function startAp(tipo, motivo) {
   setStatus(tipo === 'pausa' ? 'pausada' : 'andamento');
   syncHours(); renderApont();
   await saveSvc(false);
+  tipo === 'pausa' ? Local.check() : Local.iniciar(editingSvc);
 }
 async function startDesl(kmIni) {
   if (!$('#sCliente').value) return toast('Escolha o cliente primeiro');
@@ -1084,6 +1085,7 @@ async function startDesl(kmIni) {
   if ($('#sStatus').value !== 'concluido') setStatus('deslocamento');
   syncHours(); renderApont();
   await saveSvc(false);
+  Local.iniciar(editingSvc);
 }
 async function endDesl(kmFim) {
   const run = apont.find(x => !x.fim && x.tipo === 'deslocamento'); if (!run) return;
@@ -1091,6 +1093,7 @@ async function endDesl(kmFim) {
   if ($('#sStatus').value === 'deslocamento') setStatus('aguardando');
   syncHours(); renderApont();
   await saveSvc(false);
+  Local.check();
   toast(`Chegada registrada: ${n(kmFim) - n(run.kmIni)} km rodados`);
 }
 // Para finalizar a OS: fotos do horímetro e do chassi + falha, causa e solução preenchidas
@@ -1114,7 +1117,38 @@ async function stopAp() {
   const now = Date.now(); pausePick = false; kmPick = null; apont.forEach(x => { if (!x.fim) x.fim = now; });
   syncHours(); renderApont();
   await saveSvc(false);
+  Local.check();
 }
+
+/* ---------- Localização para o portal ---------- */
+// Enquanto um deslocamento ou atendimento iniciado neste aparelho está rodando, o app manda a
+// posição para o cliente acompanhar no portal. Sem sinal, guarda a última e manda quando voltar.
+const Local = (() => {
+  const ls = k => ({ get() { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } }, set(v) { try { v ? localStorage.setItem(k, JSON.stringify(v)) : localStorage.removeItem(k); } catch {} } });
+  const PEND = ls('cs-posicao'), AQUI = ls('cs-rastrear');
+  let watch = null, sent = null;
+  const rodando = id => ((id === editingSvc ? apont : atend[id]?.apontamentos) || []).some(x => !x.fim && x.tipo !== 'pausa');
+  const ativas = () => { const l = (AQUI.get() || []).filter(rodando); AQUI.set(l.length ? l : null); return l; };
+  const metros = (p, q) => { const r = Math.PI / 180, a = Math.sin((q.lat - p.lat) * r / 2) ** 2 + Math.cos(p.lat * r) * Math.cos(q.lat * r) * Math.sin((q.lng - p.lng) * r / 2) ** 2; return 12742000 * Math.asin(Math.sqrt(a)); };
+  async function enviar() {
+    const p = PEND.get(); if (!p || navigator.onLine === false || !Nuvem.db()) return;
+    try { await Nuvem.posicao(p); if (PEND.get()?.em === p.em) PEND.set(null); sent = { ...p, at: Date.now() }; } catch {}
+  }
+  function onPos(g) {
+    const ids = ativas(); if (!ids.length) return;
+    const p = { ids, lat: g.coords.latitude, lng: g.coords.longitude, precisao: Math.round(g.coords.accuracy), em: g.timestamp || Date.now() };
+    if (sent && Date.now() - sent.at < 60000 && metros(sent, p) < 100 && sent.ids.join() === ids.join()) return;
+    PEND.set(p); enviar();
+  }
+  function check() {
+    const on = !!navigator.geolocation && ativas().length > 0;
+    if (on && watch == null) watch = navigator.geolocation.watchPosition(onPos, () => {}, { enableHighAccuracy: true, maximumAge: 30000, timeout: 60000 });
+    if (!on && watch != null) { navigator.geolocation.clearWatch(watch); watch = null; }
+    enviar();
+  }
+  setInterval(check, 15000); addEventListener('online', enviar);
+  return { iniciar(id) { if (id) AQUI.set([...new Set([...(AQUI.get() || []), id])]); check(); }, check };
+})();
 
 /* ---------- Checklist ---------- */
 function renderChk() {
