@@ -220,6 +220,7 @@ main .wrap{gap:20px}
 .pill.example{background:transparent;color:var(--accent)}
 .meta{font-size:13px;gap:10px}
 .osn{font-size:12px}
+.osbig{font-size:22px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}
 
 /* formulários: grupos sem moldura */
 fieldset{border:0;padding:0;gap:12px}
@@ -763,10 +764,10 @@ function renderAtend() {
 function svcCard(a) {
     const c = clientes[a.clienteId], m = maquinas[a.maquinaId];
     return el('button', { type: 'button', class: 'card tap svc', 'data-status': a.status, onclick: () => openSvc(a.id) },
+      osLabel(a) && el('div', { class: 'osbig' }, osLabel(a)),
       el('div', { class: 'spread' },
         el('span', { class: 'title' }, c ? cliLabel(c) : 'Cliente removido')),
       el('div', { class: 'row' },
-        osLabel(a) && el('span', { class: 'osn' }, osLabel(a)),
         el('span', { class: 'pill st-' + a.status }, STATUS[a.status] || a.status),
         el('span', { class: 'pill' }, tipoTxt(a.tipo)),
         a.exemplo && el('span', { class: 'pill example' }, 'Exemplo')),
