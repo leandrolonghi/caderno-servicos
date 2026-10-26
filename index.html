@@ -167,11 +167,28 @@ nav.tabs svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2
 .ap[data-editing="true"]{background:var(--accent-soft)}
 .chk{display:flex;flex-direction:column;gap:6px}
 .chkrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.ponto{display:flex;flex-direction:column;gap:8px;padding:8px 0 10px;border-bottom:1px solid var(--line)}
+.ponto-top{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:center}
+.ponto-top>.ref{width:56px;height:56px}
+.ponto-acts{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.ponto-acts .tbtn{display:flex;align-items:center;justify-content:center;min-height:36px;min-width:44px;border:1px solid var(--line);border-radius:8px;background:var(--surface);cursor:pointer}
+.ponto-acts .x{min-height:36px;min-width:36px;padding:0;margin-left:auto}
+.ponto .photo{width:64px;height:64px}
+.ref{position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:var(--bg);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+.ref img{width:100%;height:100%;object-fit:cover;display:block}
+.ref .camico{opacity:.55}
+.pontocfg{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.pontocfg>.ref{width:56px;height:56px}
+.verfoto{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:12px}
+.verfoto img{max-width:100%;max-height:100%;object-fit:contain}
+.verfoto span{position:absolute;left:0;right:0;bottom:0;padding:12px 16px;color:#fff;font-size:15px;background:linear-gradient(transparent,rgba(0,0,0,.7))}
+.photo img{cursor:zoom-in}
 .seg{display:flex;gap:3px;flex-wrap:wrap}
 .seg button{min-height:36px;padding:4px 8px;font-size:13px;border-radius:8px}
 .seg button[aria-pressed="true"][data-v="ok"]{background:var(--ok);border-color:var(--ok);color:var(--surface)}
 .seg button[aria-pressed="true"][data-v="atencao"]{background:var(--warn);border-color:var(--warn);color:var(--surface)}
 .seg button[aria-pressed="true"][data-v="trocado"]{background:var(--info);border-color:var(--info);color:var(--surface)}
+.seg button[aria-pressed="true"][data-v="nok"]{background:var(--bad);border-color:var(--bad);color:var(--surface)}
 .seg button[aria-pressed="true"][data-v="na"]{background:var(--muted);border-color:var(--muted);color:var(--surface)}
 @media (max-width:480px){.chkrow{grid-template-columns:1fr}}
 /* bloco de assinatura imita papel nos dois temas */
@@ -393,9 +410,9 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
       <div class="row"><input id="motivoNew" placeholder="Novo motivo, ex.: Abastecimento" style="flex:1;min-width:180px"><button type="button" id="btnMotivoAdd">+ Motivo</button></div>
     </div>
     <div class="ajpanel" data-aj="checklist" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Checklist</h2>
-      <p class="small muted" style="margin:0">Itens que aparecem no checklist de toda OS nova.</p>
+      <p class="small muted" style="margin:0">Pontos de inspeção de toda OS nova. Toque na foto para mostrar qual é o componente.</p>
       <div class="list" id="chkCfgList"></div>
-      <div class="row"><input id="chkCfgNew" placeholder="Novo item, ex.: Nível do óleo" style="flex:1;min-width:180px"><button type="button" id="btnChkCfgAdd">+ Item</button></div>
+      <div class="row"><input id="chkCfgNew" placeholder="Novo ponto, ex.: Correia do ventilador" style="flex:1;min-width:180px"><button type="button" id="btnChkCfgAdd">+ Ponto</button></div>
     </div>
     <div class="ajpanel" data-aj="conta" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Conta</h2>
       <p style="margin:0" id="contaEmail"></p>
@@ -449,7 +466,7 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
       </fieldset>
       <fieldset data-tab="checklist"><legend>Checklist</legend>
         <div class="chk" id="chkBox"></div>
-        <div class="row"><input id="chkNew" placeholder="Outro item a verificar" style="flex:1;min-width:160px"><button type="button" id="btnChkAdd">+ Item</button></div>
+        <div class="row"><input id="chkNew" placeholder="Outro ponto a inspecionar" style="flex:1;min-width:160px"><button type="button" id="btnChkAdd">+ Ponto</button></div>
       </fieldset>
       <fieldset data-tab="servico" data-sub="solucao"><legend>Testes</legend>
         <div class="list" id="testBox"></div>
@@ -570,10 +587,14 @@ function fillTipoSelect(cur) {
 }
 const STATUS = { aberto: 'Agendado', deslocamento: 'Deslocamento', aguardando: 'Aguardando atendimento', andamento: 'Em atendimento', pausada: 'Pausada', concluido: 'Finalizada', faturado: 'Faturado' };
 
-const EST = [['ok', 'OK'], ['atencao', 'Atenção'], ['trocado', 'Trocado'], ['na', 'N/A']];
-const EST_TXT = { ok: '✔ OK', atencao: '⚠ Atenção', trocado: '🔧 Trocado', na: 'N/A' };
+const EST = [['ok', 'OK'], ['nok', 'Não OK']];
+// atencao/trocado/na: situações do checklist antigo, só para exibir OS já registradas
+const EST_LBL = { ok: 'OK', nok: 'Não OK', atencao: 'Atenção', trocado: 'Trocado', na: 'N/A' };
+const EST_TXT = { ok: '✔ OK', nok: '✖ Não OK', atencao: '⚠ Atenção', trocado: '🔧 Trocado', na: 'N/A' };
 const AP_TXT = { deslocamento: 'Deslocamento', trabalho: 'Atendimento', pausa: 'Pausa' };
-const chkItens = () => Array.isArray(cfg.checklistItens) ? cfg.checklistItens : [];
+// pontos de inspeção: { item, foto } (foto de referência do componente); versões antigas guardavam só o texto
+const chkItens = () => (Array.isArray(cfg.checklistItens) ? cfg.checklistItens : []).map(x => typeof x === 'string' ? { item: x, foto: null } : { item: x.item || '', foto: x.foto || null });
+const chkRef = x => x.ref || chkItens().find(t => t.item === x.item)?.foto || null;
 const motivos = () => Array.isArray(cfg.motivosPausa) ? cfg.motivosPausa : MOTIVOS;
 const MOTIVOS = ['Almoço / refeição', 'Aguardando peça', 'Chuva / clima', 'Aguardando cliente ou operador', 'Buscar peça / material', 'Máquina em operação'];
 // LGPD: no PDF o CPF sai mascarado (CNPJ é dado da empresa e sai completo)
@@ -667,7 +688,8 @@ async function flushPhotos() {
     const realId = (await withTimeout(assets.upload(blob), 60000)).id;
     outbox = swapRef(outbox, k, realId); LS.set('cs-outbox', outbox);
     for (const a of Object.values(atend)) if (JSON.stringify(a).includes(k)) store.doc('atendimentos/' + a.id).set(swapRef(a, k, realId));
-    photos = swapRef(photos, k, realId); fotosProb = swapRef(fotosProb, k, realId); testes = swapRef(testes, k, realId); idFotos = swapRef(idFotos, k, realId); sig = swapRef(sig, k, realId);
+    photos = swapRef(photos, k, realId); fotosProb = swapRef(fotosProb, k, realId); testes = swapRef(testes, k, realId); idFotos = swapRef(idFotos, k, realId); sig = swapRef(sig, k, realId); chk = swapRef(chk, k, realId);
+    if (JSON.stringify(cfg).includes(k)) store.doc('config/geral').set(swapRef(cfg, k, realId));
     if (objUrls[k]) objUrls[realId] = objUrls[k];
     await idb.del(k);
   }
@@ -882,7 +904,8 @@ function openSvc(id, preset = {}) {
   const a = id ? atend[id] : { data: today(), status: 'aberto', tipo: '', valorHora: cfg.valorHora, valorKm: cfg.valorKm, ...preset };
   $('#svcTitle').textContent = id ? (osLabel(a) || 'Atendimento') : 'Nova OS';
   apont = (a.apontamentos || []).map(x => ({ ...x }));
-  chk = id && (a.checklist || []).some(x => x.estado) ? a.checklist.map(x => ({ ...x })) : chkItens().map(item => ({ item, estado: '' }));
+  chk = id && (a.checklist || []).some(x => x.estado || x.obs || x.fotos?.length) ? a.checklist.map(x => ({ ...x, obs: x.obs || '', fotos: [...(x.fotos || [])] }))
+    : chkItens().map(t => ({ item: t.item, ref: t.foto, estado: '', obs: '', fotos: [] }));
   sig = a.assinatura || null; pausePick = false; kmPick = null; apEdit = null;
   idFotos = { fotoHorimetro: a.fotoHorimetro || null, fotoChassi: a.fotoChassi || null };
   fillClientSelect($('#sCliente'), a.clienteId, 'Escolha o cliente');
@@ -1152,17 +1175,45 @@ const Local = (() => {
 })();
 
 /* ---------- Checklist ---------- */
+// cada ponto: foto de referência do componente, OK / Não OK, observação e fotos de como ele está
 function renderChk() {
   svcAuto.kick();
   const box = $('#chkBox'); box.replaceChildren();
-  if (!chk.length) box.append(el('div', { class: 'small muted' }, 'Sem itens. Adicione o que você verificou.'));
-  chk.forEach((x, i) => box.append(el('div', { class: 'chkrow' },
-    el('span', {}, x.item),
-    el('div', { class: 'seg', role: 'group', 'aria-label': x.item },
-      ...EST.map(([v, label]) => el('button', { type: 'button', 'data-v': v, 'aria-pressed': String(x.estado === v), onclick: () => { x.estado = x.estado === v ? '' : v; renderChk(); } }, label)),
-      el('button', { type: 'button', 'aria-label': 'Remover item', onclick: () => { chk.splice(i, 1); renderChk(); } }, '×')))));
+  if (!chk.length) box.append(el('div', { class: 'small muted' }, 'Sem pontos. Cadastre em Ajustes › Checklist ou adicione abaixo.'));
+  chk.forEach((x, i) => {
+    const ref = chkRef(x);
+    const addFotos = async e => {
+      const files = [...e.target.files]; if (!files.length) return;
+      toast(`Enviando ${files.length} foto(s)…`);
+      for (const f of files) { try { x.fotos.push(await uploadImg(await shrink(f))); renderChk(); } catch (err) { toast('Uma foto não foi enviada: ' + (err.message || err.code)); } }
+    };
+    const acts = el('div', { class: 'ponto-acts' },
+      el('div', { class: 'seg', role: 'group', 'aria-label': x.item },
+        ...EST.map(([v, label]) => el('button', { type: 'button', 'data-v': v, 'aria-pressed': String(x.estado === v), onclick: () => { x.estado = x.estado === v ? '' : v; renderChk(); } }, label))),
+      EST_LBL[x.estado] && !EST.some(([v]) => v === x.estado) ? el('span', { class: 'small muted' }, EST_LBL[x.estado]) : '');
+    if (assets) acts.append(el('label', { class: 'tbtn', for: `ck_f_${i}`, title: 'Foto do componente', 'aria-label': 'Foto de como o componente está' }, camIco()),
+      el('input', { type: 'file', accept: 'image/*', multiple: true, id: `ck_f_${i}`, hidden: true, onchange: addFotos }));
+    acts.append(el('button', { type: 'button', class: 'x', 'aria-label': 'Remover ponto', onclick: () => { chk.splice(i, 1); renderChk(); } }, '×'));
+    const top = el('div', { class: 'ponto-top' },
+      ref ? el('div', { class: 'ref', role: 'button', 'aria-label': 'Ver foto de referência', onclick: () => verFoto(ref, x.item) }, imgOf(ref, { alt: 'Referência: ' + x.item, loading: 'lazy' })) : '',
+      el('div', { style: 'display:flex;flex-direction:column;gap:6px;min-width:0' }, el('b', {}, x.item), acts));
+    if (!ref) top.style.gridTemplateColumns = '1fr';
+    const p = el('div', { class: 'ponto' }, top);
+    if (x.estado || x.obs || x.fotos.length) p.append(el('input', { 'aria-label': 'Observação sobre ' + x.item, placeholder: x.estado === 'nok' ? 'O que está errado' : 'Observação', value: x.obs, oninput: e => x.obs = e.target.value }));
+    if (x.fotos.length) p.append(el('div', { class: 'photos' }, ...x.fotos.map((pid, j) => el('div', { class: 'photo' },
+      imgOf(pid, { alt: `Foto ${j + 1} de ${x.item}`, loading: 'lazy' }),
+      el('button', { type: 'button', 'aria-label': 'Remover foto', onclick: () => { x.fotos.splice(j, 1); renderChk(); } }, '×')))));
+    box.append(p);
+  });
 }
-$('#btnChkAdd').onclick = () => { const v = $('#chkNew').value.trim(); if (!v) return; chk.push({ item: v, estado: '' }); $('#chkNew').value = ''; renderChk(); };
+$('#btnChkAdd').onclick = () => { const v = $('#chkNew').value.trim(); if (!v) return; chk.push({ item: v, estado: '', obs: '', fotos: [] }); $('#chkNew').value = ''; renderChk(); };
+$('#chkNew').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#btnChkAdd').click(); } });
+// foto em tela cheia (toque para fechar)
+function verFoto(id, legenda) {
+  const ov = el('div', { class: 'verfoto', role: 'dialog', 'aria-label': legenda || 'Foto', onclick: () => ov.remove() }, imgOf(id, { alt: legenda || '' }), legenda ? el('span', {}, legenda) : '');
+  document.body.append(ov);
+}
+document.addEventListener('click', e => { const img = e.target.closest?.('.photo img'); if (img?.src) { const ov = el('div', { class: 'verfoto', role: 'dialog', onclick: () => ov.remove() }, el('img', { src: img.src, alt: img.alt })); document.body.append(ov); } });
 
 /* ---------- Assinatura ---------- */
 function renderSig() {
@@ -1379,7 +1430,7 @@ async function saveSvc(close, silent) {
     testes: testes.filter(x => x.desc.trim() || x.fotos.length).map(x => ({ desc: x.desc.trim(), fotos: x.fotos })),
     descricao: $('#sDesc').value.trim(), recomendacao: $('#sObsCli').value.trim(),
     pecas: parts.filter(p => (p.desc || '').trim() || n(p.valor)).map(p => ({ desc: (p.desc || '').trim(), qtd: n(p.qtd), valor: n(p.valor) })),
-    fotos: photos, fotoHorimetro: idFotos.fotoHorimetro, fotoChassi: idFotos.fotoChassi, apontamentos: apont, checklist: chk, assinatura: sig, atualizadoEm: Date.now() };
+    fotos: photos, fotoHorimetro: idFotos.fotoHorimetro, fotoChassi: idFotos.fotoChassi, apontamentos: apont, checklist: chk.map(x => ({ item: x.item, ref: chkRef(x), estado: x.estado || '', obs: (x.obs || '').trim(), fotos: x.fotos || [] })), assinatura: sig, atualizadoEm: Date.now() };
   if (!prev.criadoEm) data.criadoEm = Date.now();
   if (!prev.numero) data.numero = Math.max(0, ...Object.values(atend).map(a => a.numero || 0)) + 1;
   if (data.status === 'faturado' && !prev.faturadoEm) data.faturadoEm = Date.now();
@@ -1458,7 +1509,7 @@ function reportText(a) {
   if ((a.testes || []).length) { L.push('', '*Testes realizados*'); a.testes.forEach((x, i) => L.push(`${i + 1}. ${x.desc}${x.fotos?.length ? ` (${x.fotos.length} foto${x.fotos.length > 1 ? 's' : ''})` : ''}`)); }
   if ((a.pecas || []).length) { L.push('', '*Materiais de consumo*'); for (const p of a.pecas) L.push(`• ${p.desc} (${p.qtd}× ${brl(p.valor)}) = ${brl(n(p.qtd) * n(p.valor))}`); }
   const ck = (a.checklist || []).filter(x => x.estado && x.estado !== 'na');
-  if (ck.length) { L.push('', '*Checklist*'); for (const x of ck) L.push(`${EST_TXT[x.estado]} – ${x.item}`); }
+  if (ck.length) { L.push('', '*Checklist*'); for (const x of ck) L.push(`${EST_TXT[x.estado]} – ${x.item}${x.obs ? `: ${x.obs}` : ''}${x.fotos?.length ? ` (${x.fotos.length} foto${x.fotos.length > 1 ? 's' : ''})` : ''}`); }
   if (a.recomendacao) L.push('', '*Cuidados*', a.recomendacao);
   const apAll = a.apontamentos || [], tr = apAll.filter(x => x.tipo === 'trabalho' && x.fim).sort((p, q) => p.ini - q.ini);
   if (tr.length) { L.push('', '*Horário de atendimento*'); for (const x of tr) { const pz = pausaApos(apAll, x); L.push(`• ${fmtDate(dayOf(x.ini))} ${hhmm(x.ini)}–${hhmm(x.fim)} (${dur(x.fim - x.ini)})${pz ? ` · pausado: ${pz.motivo || 'sem motivo'}` : ''}`); } }
@@ -1655,13 +1706,18 @@ async function buildPdf(a) {
       { right: [1, 2, 3], columnStyles: { 1: { cellWidth: 18 }, 2: { cellWidth: 30 }, 3: { cellWidth: 30 } } });
   }
   if ((a.fotos || []).length) { heading('Fotos do serviço'); await photos(a.fotos); }
-  const ck = (a.checklist || []).filter(x => x.estado);
+  const ck = (a.checklist || []).filter(x => x.estado || x.obs || (x.fotos || []).length);
   if (ck.length) {
-    heading('Checklist');
-    const lbl = { ok: 'OK', atencao: 'Atenção', trocado: 'Trocado', na: 'N/A' };
-    table(['Item verificado', 'Situação'], ck.map(x => [x.item, lbl[x.estado]]), {
-      columnStyles: { 1: { cellWidth: 32 } },
-      didParseCell: d => { if (d.section === 'body' && d.column.index === 1) { const v = ck[d.row.index].estado; d.cell.styles.fontStyle = 'bold'; d.cell.styles.textColor = v === 'ok' ? [47, 122, 59] : v === 'atencao' ? [168, 116, 0] : v === 'trocado' ? [44, 95, 138] : MUT; } } });
+    heading('Checklist de inspeção');
+    table(['Ponto inspecionado', 'Situação', 'Observação'], ck.map(x => [x.item, EST_LBL[x.estado] || '—', x.obs || '']), {
+      columnStyles: { 0: { cellWidth: 62 }, 1: { cellWidth: 24 } },
+      didParseCell: d => { if (d.section === 'body' && d.column.index === 1) { const v = ck[d.row.index].estado; d.cell.styles.fontStyle = 'bold'; d.cell.styles.textColor = v === 'ok' ? [47, 122, 59] : v === 'nok' ? [179, 38, 30] : v === 'atencao' ? [168, 116, 0] : v === 'trocado' ? [44, 95, 138] : MUT; } } });
+    for (const x of ck.filter(x => (x.fotos || []).length)) {
+      space(58); doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...INK);
+      for (const line of doc.splitTextToSize(`${x.item}${EST_LBL[x.estado] ? ' · ' + EST_LBL[x.estado] : ''}`, CW)) { space(5); doc.text(line, M, y); y += 4.5; }
+      y += 1;
+      await photos(x.fotos);
+    }
   }
   if (a.recomendacao) { heading('Cuidados e recomendações'); para(a.recomendacao); }
 
@@ -1769,14 +1825,27 @@ $('#tipoNew').addEventListener('keydown', e => { if (e.key === 'Enter') { e.prev
 function renderChkCfg() {
   const box = $('#chkCfgList'); box.replaceChildren();
   const ms = chkItens();
-  if (!ms.length) box.append(el('div', { class: 'small muted' }, 'Nenhum item cadastrado. A OS abre com o checklist vazio.'));
-  ms.forEach((m, i) => box.append(el('div', { class: 'spread', style: 'border-bottom:1px solid var(--line);padding-block:4px' }, el('span', {}, m),
-    el('button', { type: 'button', class: 'danger', 'aria-label': 'Remover ' + m, style: 'min-height:36px', onclick: () => store.doc('config/geral').set({ ...cfg, checklistItens: ms.filter((_, j) => j !== i) }) }, 'Remover'))));
+  const salvar = lista => store.doc('config/geral').set({ ...cfg, checklistItens: lista });
+  if (!ms.length) box.append(el('div', { class: 'small muted' }, 'Nenhum ponto cadastrado. A OS abre com o checklist vazio.'));
+  ms.forEach((m, i) => {
+    const inId = 'ckref_' + i;
+    const trocar = async e => {
+      const f = e.target.files[0]; if (!f) return;
+      toast('Enviando foto…');
+      try { const id = await uploadImg(await shrink(f)); salvar(chkItens().map((t, j) => j === i ? { ...t, foto: id } : t)); }
+      catch (err) { toast('A foto não foi enviada: ' + (err.message || err.code)); }
+    };
+    const ref = el('label', { class: 'ref', for: inId, title: m.foto ? 'Trocar foto' : 'Foto do componente', 'aria-label': (m.foto ? 'Trocar foto de ' : 'Foto de ') + m.item }, m.foto ? imgOf(m.foto, { alt: m.item, loading: 'lazy' }) : camIco());
+    const nome = el('input', { value: m.item, 'aria-label': 'Descrição do ponto', onchange: e => { const v = e.target.value.trim(); if (!v) { e.target.value = m.item; return; } salvar(chkItens().map((t, j) => j === i ? { ...t, item: v } : t)); } });
+    box.append(el('div', { class: 'pontocfg' }, assets ? ref : el('div', { class: 'ref', style: 'width:56px;height:56px' }, m.foto ? imgOf(m.foto, { alt: m.item }) : ''),
+      el('input', { type: 'file', accept: 'image/*', id: inId, hidden: true, onchange: trocar }), nome,
+      el('button', { type: 'button', class: 'danger', 'aria-label': 'Remover ' + m.item, style: 'min-height:36px', onclick: () => { if (confirm(`Remover o ponto "${m.item}"?`)) salvar(ms.filter((_, j) => j !== i)); } }, 'Remover')));
+  });
 }
 $('#btnChkCfgAdd').onclick = () => {
-  const v = $('#chkCfgNew').value.trim(); if (!v) return toast('Escreva o item');
-  if (chkItens().includes(v)) return toast('Esse item já existe');
-  store.doc('config/geral').set({ ...cfg, checklistItens: [...chkItens(), v] }); $('#chkCfgNew').value = '';
+  const v = $('#chkCfgNew').value.trim(); if (!v) return toast('Escreva o ponto');
+  if (chkItens().some(t => t.item === v)) return toast('Esse ponto já existe');
+  store.doc('config/geral').set({ ...cfg, checklistItens: [...chkItens(), { item: v, foto: null }] }); $('#chkCfgNew').value = '';
 };
 $('#chkCfgNew').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#btnChkCfgAdd').click(); } });
 function renderCfg() {
@@ -1786,7 +1855,7 @@ function renderCfg() {
   qt('valores', `Hora ${brl(cfg.valorHora || 0)} · km ${brl(cfg.valorKm || 0)}`);
   qt('tipos', tipos().length + ' tipos');
   qt('motivos', motivos().length + ' motivos');
-  qt('checklist', chkItens().length ? chkItens().length + ' itens' : 'Nenhum item');
+  qt('checklist', chkItens().length ? chkItens().length + ' pontos' : 'Nenhum ponto');
   qt('backup', 'Planilha ou cópia completa');
   const put = (sel, v) => { if (document.activeElement !== $(sel)) $(sel).value = v; };
   put('#cfgNome', cfg.nome || ''); put('#cfgCnpj', cfg.cnpj || ''); put('#cfgTel', cfg.telefone || ''); put('#cfgEmail', cfg.email || ''); put('#cfgEnd', cfg.endereco || ''); put('#cfgHora', cfg.valorHora || ''); put('#cfgKm', cfg.valorKm || '');
