@@ -6,6 +6,7 @@
 -- que a OS está finalizada. O CPF aparece mascarado, como no PDF.
 -- Enquanto a OS está em deslocamento ou atendimento, o cliente vê no mapa a última
 -- posição que o app enviou.
+-- O checklist de inspeção aparece com a situação, a observação e as fotos de cada ponto.
 -- As senhas ficam guardadas embaralhadas (bcrypt): nem você consegue ler depois.
 -- A senha que você cria é provisória: no primeiro acesso o cliente cria a senha dele.
 -- A sessão termina ao fechar a aba do portal (e vence sozinha depois de 30 minutos sem uso).
@@ -218,9 +219,10 @@ begin
         'materiais', (select coalesce(jsonb_agg(jsonb_build_object('desc', p->'desc', 'qtd', p->'qtd',
                         'valor', case when fin then public.portal_num(p->'valor') end)), '[]')
                       from jsonb_array_elements(jsonb_path_query_array(a.data, '$.pecas[*]')) p),
-        'checklist', (select coalesce(jsonb_agg(jsonb_build_object('item', k->'item', 'estado', k->'estado')), '[]')
+        'checklist', (select coalesce(jsonb_agg(jsonb_build_object('item', k->'item', 'estado', k->'estado', 'obs', k->'obs',
+                        'fotos', jsonb_path_query_array(k, '$.fotos[*]'))), '[]')
                       from jsonb_array_elements(jsonb_path_query_array(a.data, '$.checklist[*]')) k
-                      where coalesce(k->>'estado', '') <> ''),
+                      where coalesce(k->>'estado', '') <> '' or coalesce(k->>'obs', '') <> '' or jsonb_path_exists(k, '$.fotos[*]')),
         'apontamentos', (select coalesce(jsonb_agg(jsonb_build_object('tipo', x->'tipo', 'ini', x->'ini', 'fim', x->'fim', 'motivo', x->'motivo',
                            'kmIni', x->'kmIni', 'kmFim', x->'kmFim')), '[]')
                          from jsonb_array_elements(jsonb_path_query_array(a.data, '$.apontamentos[*]')) x),
@@ -257,7 +259,8 @@ language sql stable security definer set search_path = public as $$
         or a.data->>'fotoHorimetro' = split_part(p_name, '/', 2)
         or a.data->>'fotoChassi' = split_part(p_name, '/', 2)
         or a.data#>>'{assinatura,id}' = split_part(p_name, '/', 2)
-        or jsonb_path_exists(a.data, '$.testes[*].fotos[*] ? (@ == $f)', jsonb_build_object('f', split_part(p_name, '/', 2))))
+        or jsonb_path_exists(a.data, '$.testes[*].fotos[*] ? (@ == $f)', jsonb_build_object('f', split_part(p_name, '/', 2)))
+        or jsonb_path_exists(a.data, '$.checklist[*].fotos[*] ? (@ == $f)', jsonb_build_object('f', split_part(p_name, '/', 2))))
   );
 $$;
 
