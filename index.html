@@ -1130,6 +1130,7 @@ async function endDesl(kmFim) {
   toast(`Chegada registrada: ${n(kmFim) - n(run.kmIni)} km rodados`);
 }
 // Para finalizar a OS: fotos do horímetro e do chassi + falha, causa e solução preenchidas
+// + todo ponto Não OK do checklist com foto e observação
 function faltaParaFinalizar() {
   const f = [];
   if (!idFotos.fotoHorimetro) f.push('foto do horímetro');
@@ -1137,6 +1138,8 @@ function faltaParaFinalizar() {
   if (!$('#sProblema').value.trim()) f.push('falha');
   if (!$('#sCausa').value.trim()) f.push('causa');
   if (!$('#sDesc').value.trim()) f.push('solução');
+  const nok = chk.filter(x => x.estado === 'nok' && (!(x.obs || '').trim() || !x.fotos.length));
+  if (nok.length) f.push('foto e observação no checklist (' + nok.map(x => x.item).join(', ') + ')');
   return f;
 }
 function setStatus(st) {
@@ -1219,10 +1222,14 @@ function renderChk() {
       el('div', { style: 'display:flex;flex-direction:column;gap:6px;min-width:0' }, el('b', {}, x.item), acts));
     if (!ref) top.style.gridTemplateColumns = '1fr';
     const p = el('div', { class: 'ponto' }, top);
-    if (x.estado || x.obs || x.fotos.length) p.append(el('input', { 'aria-label': 'Observação sobre ' + x.item, placeholder: x.estado === 'nok' ? 'O que está errado' : 'Observação', value: x.obs, oninput: e => x.obs = e.target.value }));
+    // Não OK exige foto e observação (a OS não finaliza sem elas)
+    const aviso = el('div', { class: 'small', style: 'color:var(--bad)' });
+    const avisar = () => { const f = x.estado !== 'nok' ? [] : [!(x.obs || '').trim() && 'observação', !x.fotos.length && 'foto'].filter(Boolean); aviso.textContent = f.length ? 'Obrigatório: ' + f.join(' e ') : ''; aviso.hidden = !f.length; };
+    if (x.estado || x.obs || x.fotos.length) p.append(el('input', { 'aria-label': 'Observação sobre ' + x.item, placeholder: x.estado === 'nok' ? 'O que está errado (obrigatório)' : 'Observação', value: x.obs, oninput: e => { x.obs = e.target.value; avisar(); } }));
     if (x.fotos.length) p.append(el('div', { class: 'photos' }, ...x.fotos.map((pid, j) => el('div', { class: 'photo' },
       imgOf(pid, { alt: `Foto ${j + 1} de ${x.item}`, loading: 'lazy' }),
       el('button', { type: 'button', 'aria-label': 'Remover foto', onclick: () => { x.fotos.splice(j, 1); renderChk(); } }, '×')))));
+    avisar(); p.append(aviso);
     box.append(p);
   });
   });
