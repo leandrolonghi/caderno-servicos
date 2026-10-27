@@ -27,7 +27,7 @@ const cache = (() => {
 /* espelho dos documentos */
 const mirror = {};
 const listeners = [];
-let ready = false, lastMax = null, pulling = null;
+let ready = false, lastMax = null, pulling = null, again = false;
 const snapCol = col => ({ docs: Object.entries(mirror[col] || {}).map(([id, d]) => ({ id, data: () => d })) });
 const snapDoc = (col, id) => { const d = mirror[col]?.[id]; return { exists: !!d, data: () => d }; };
 function emit(cols) {
@@ -42,7 +42,8 @@ function applyRow(r, changed) {
   if (!lastMax || r.updated_at > lastMax) lastMax = r.updated_at;
 }
 async function pull() {
-  if (!sb || !user || pulling) return pulling;
+  if (!sb || !user) return;
+  if (pulling) { again = true; return pulling; }
   pulling = (async () => {
     const full = !ready, changed = new Set();
     const since = lastMax ? new Date(new Date(lastMax).getTime() - OVERLAP_MS).toISOString() : null;
@@ -56,8 +57,25 @@ async function pull() {
     }
     if (full) { ready = true; emit(new Set(listeners.map(l => l.col))); }
     else emit(changed);
-  })().finally(() => { pulling = null; });
+  })().finally(() => { pulling = null; if (again) { again = false; pull().catch(() => {}); } });
   return pulling;
+}
+
+/* aviso entre aparelhos: quem grava avisa os outros aparelhos da mesma conta, que buscam na hora.
+   Se o aviso não chegar (sem sinal, app em segundo plano), a busca periódica cobre. */
+let canal = null, avisoT = null;
+function ligarCanal() {
+  if (canal) { try { sb.removeChannel(canal); } catch {} canal = null; }
+  if (!sb || !user) return;
+  try {
+    canal = sb.channel('cs-' + user.id, { config: { broadcast: { self: false } } })
+      .on('broadcast', { event: 'mudou' }, () => tryPull())
+      .subscribe(st => { if (st === 'SUBSCRIBED') tryPull(); });
+  } catch { canal = null; }
+}
+function avisar() {
+  clearTimeout(avisoT);
+  avisoT = setTimeout(() => { try { canal?.send({ type: 'broadcast', event: 'mudou', payload: {} }); } catch {} }, 300);
 }
 const tryPull = () => { if (!document.hidden && navigator.onLine !== false) pull().catch(() => {}); };
 setInterval(tryPull, POLL_MS);
@@ -75,6 +93,7 @@ async function write(col, id, op, data) {
   if (op === 'delete') delete m[id];
   else if (op === 'update') m[id] = { ...(m[id] || {}), ...data, id };
   else m[id] = data;
+  avisar();
 }
 
 const db = {
@@ -120,8 +139,9 @@ async function blobUrl(id) {
 function setUser(u) {
   const was = user?.id;
   user = u ? { id: u.id, email: u.email } : null; LU.set(user);
-  if (user?.id !== was) { ready = false; lastMax = null; for (const k of Object.keys(mirror)) delete mirror[k]; authFns.forEach(f => f(user)); }
+  if (user?.id !== was) { ready = false; lastMax = null; for (const k of Object.keys(mirror)) delete mirror[k]; ligarCanal(); authFns.forEach(f => f(user)); }
 }
+if (sb && user) ligarCanal();
 if (sb) {
   sb.auth.getSession().then(({ data }) => { if (data?.session?.user) setUser(data.session.user); else if (navigator.onLine !== false && !data?.session) setUser(null); }).catch(() => {});
   sb.auth.onAuthStateChange((ev, session) => { if (session?.user) setUser(session.user); else if (ev === 'SIGNED_OUT') setUser(null); });

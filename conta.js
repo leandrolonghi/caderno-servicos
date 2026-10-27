@@ -41,5 +41,22 @@ $('#btnSair').onclick = async () => {
   location.reload();
 };
 
-if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+/* Versão nova do app: procura de tempos em tempos e, quando chega, recarrega sozinho
+   assim que nenhuma tela de edição estiver aberta (para não perder o que está sendo digitado). */
+if ('serviceWorker' in navigator) window.addEventListener('load', () => {
+  const tinha = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    const checar = () => { if (!document.hidden && navigator.onLine !== false) reg.update().catch(() => {}); };
+    setInterval(checar, 5 * 60000);
+    document.addEventListener('visibilitychange', checar);
+  }).catch(() => {});
+  let pendente = false;
+  const livre = () => ![...document.querySelectorAll('.sheet')].some(s => !s.hidden && s.id !== 'loginSheet')
+    && !document.querySelector('dialog[open]') && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '');
+  const tentar = () => { if (pendente && livre()) location.reload(); };
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!tinha || pendente) return;
+    pendente = true; tentar(); setInterval(tentar, 3000);
+  });
+});
 })();
