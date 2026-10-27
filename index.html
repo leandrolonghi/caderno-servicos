@@ -1181,8 +1181,13 @@ const Local = (() => {
   const ls = k => ({ get() { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } }, set(v) { try { v ? localStorage.setItem(k, JSON.stringify(v)) : localStorage.removeItem(k); } catch {} } });
   const PEND = ls('cs-posicao'), AQUI = ls('cs-rastrear');
   let watch = null, sent = null;
-  const rodando = id => ((id === editingSvc ? apont : atend[id]?.apontamentos) || []).some(x => !x.fim && x.tipo !== 'pausa');
-  const ativas = () => { const l = (AQUI.get() || []).filter(rodando); AQUI.set(l.length ? l : null); return l; };
+  // null = OS ainda não carregada (app acabou de abrir ou recarregar): não esquece a OS por isso
+  const rodando = id => { const ap = id === editingSvc ? apont : atend[id] ? atend[id].apontamentos || [] : null; return ap && ap.some(x => !x.fim && x.tipo !== 'pausa'); };
+  const ativas = () => {
+    const l = AQUI.get() || [], fica = l.filter(id => rodando(id) !== false);
+    if (fica.length !== l.length) AQUI.set(fica.length ? fica : null);
+    return fica.filter(id => rodando(id));
+  };
   const metros = (p, q) => { const r = Math.PI / 180, a = Math.sin((q.lat - p.lat) * r / 2) ** 2 + Math.cos(p.lat * r) * Math.cos(q.lat * r) * Math.sin((q.lng - p.lng) * r / 2) ** 2; return 12742000 * Math.asin(Math.sqrt(a)); };
   async function enviar() {
     const p = PEND.get(); if (!p || navigator.onLine === false || !Nuvem.db()) return;
@@ -1200,7 +1205,7 @@ const Local = (() => {
     if (!on && watch != null) { navigator.geolocation.clearWatch(watch); watch = null; }
     enviar();
   }
-  setInterval(check, 15000); addEventListener('online', enviar);
+  setInterval(check, 15000); addEventListener('online', enviar); document.addEventListener('cs:dados', () => check());
   return { iniciar(id) { if (id) AQUI.set([...new Set([...(AQUI.get() || []), id])]); check(); }, check };
 })();
 
