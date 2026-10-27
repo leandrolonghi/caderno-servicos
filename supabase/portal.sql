@@ -4,6 +4,7 @@
 -- a que está em andamento e o histórico, com as mesmas informações do PDF da OS.
 -- Os valores (total, mão de obra, deslocamento e preço dos materiais) aparecem só depois
 -- que a OS está finalizada. O CPF aparece mascarado, como no PDF.
+-- Na aba Financeiro, o cliente vê as OS a faturar, as faturas aguardando pagamento e as pagas.
 -- No painel, o cliente vê as OS por máquina e por categoria de falha, e o gasto de cada máquina.
 -- Enquanto a OS está em deslocamento ou atendimento, o cliente vê no mapa a última
 -- posição que o app enviou.
@@ -208,11 +209,20 @@ begin
     'empresa', g.data->'nome', 'telefone', g.data->'telefone',
     'cnpj', g.data->'cnpj', 'email', g.data->'email', 'endereco', g.data->'endereco',
     'pasta', c.owner, 'trocarSenha', pa.trocar,
+    'faturas', (select coalesce(jsonb_agg(jsonb_build_object(
+        'id', f.id, 'numero', f.data->'numero', 'emissao', f.data->'emissao', 'vencimento', f.data->'vencimento',
+        'status', f.data->'status', 'total', public.portal_num(f.data->'total'), 'pagoEm', f.data->'pagoEm', 'forma', f.data->'forma',
+        'nf', case when f.data#>>'{nf,status}' = 'emitida' then f.data#>'{nf,numero}' end,
+        'osIds', jsonb_path_query_array(f.data, '$.osIds[*]')
+      ) order by f.data->>'emissao' desc), '[]')
+      from public.docs f
+      where f.owner = c.owner and f.col = 'faturas' and not f.deleted and f.data->>'clienteId' = c.id
+        and f.data->>'status' in ('aberta', 'paga')),
     'os', (select coalesce(jsonb_agg(jsonb_build_object(
         'id', a.id, 'numero', a.data->'numero', 'data', a.data->'data', 'status', a.data->'status', 'tipo', a.data->'tipo',
         'atualizadoEm', a.data->'atualizadoEm', 'horimetro', a.data->'horimetro',
         'fotoHorimetro', a.data->'fotoHorimetro', 'fotoChassi', a.data->'fotoChassi',
-        'categoria', nullif(a.data->>'categoria', ''), 'maquinaId', a.data->'maquinaId',
+        'categoria', nullif(a.data->>'categoria', ''), 'maquinaId', a.data->'maquinaId', 'faturaId', a.data->'faturaId',
         'falha', a.data->'problema', 'causa', a.data->'causa', 'solucao', a.data->'descricao', 'cuidados', a.data->'recomendacao',
         'fotosFalha', jsonb_path_query_array(a.data, '$.fotosProblema[*]'),
         'fotos', jsonb_path_query_array(a.data, '$.fotos[*]'),
