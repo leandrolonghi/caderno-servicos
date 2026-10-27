@@ -4,6 +4,7 @@
 -- a que está em andamento e o histórico, com as mesmas informações do PDF da OS.
 -- Os valores (total, mão de obra, deslocamento e preço dos materiais) aparecem só depois
 -- que a OS está finalizada. O CPF aparece mascarado, como no PDF.
+-- No painel, o cliente vê as OS por máquina e por categoria de falha, e o gasto de cada máquina.
 -- Enquanto a OS está em deslocamento ou atendimento, o cliente vê no mapa a última
 -- posição que o app enviou.
 -- O checklist de inspeção aparece com a situação, a observação, a foto de referência e as fotos de cada ponto.
@@ -211,6 +212,7 @@ begin
         'id', a.id, 'numero', a.data->'numero', 'data', a.data->'data', 'status', a.data->'status', 'tipo', a.data->'tipo',
         'atualizadoEm', a.data->'atualizadoEm', 'horimetro', a.data->'horimetro',
         'fotoHorimetro', a.data->'fotoHorimetro', 'fotoChassi', a.data->'fotoChassi',
+        'categoria', nullif(a.data->>'categoria', ''), 'maquinaId', a.data->'maquinaId',
         'falha', a.data->'problema', 'causa', a.data->'causa', 'solucao', a.data->'descricao', 'cuidados', a.data->'recomendacao',
         'fotosFalha', jsonb_path_query_array(a.data, '$.fotosProblema[*]'),
         'fotos', jsonb_path_query_array(a.data, '$.fotos[*]'),

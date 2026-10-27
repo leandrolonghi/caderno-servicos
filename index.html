@@ -388,7 +388,7 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
     <div id="ajMenu">
       <button type="button" class="ghost ajback" id="ajHome">‹ Início</button>
       <h2>Ajustes</h2>
-      <div class="ajlist"><button type="button" class="ajitem" data-aj="clientes"><span><b>Clientes e máquinas</b><span class="small muted" id="ajSum-clientes"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="tipos"><span><b>Tipos de serviço</b><span class="small muted" id="ajSum-tipos"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="empresa"><span><b>Empresa</b><span class="small muted" id="ajSum-empresa"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="valores"><span><b>Valores</b><span class="small muted" id="ajSum-valores"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="motivos"><span><b>Motivos de pausa</b><span class="small muted" id="ajSum-motivos"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="checklist"><span><b>Checklist</b><span class="small muted" id="ajSum-checklist"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="conta"><span><b>Conta</b><span class="small muted" id="ajSum-conta"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="backup"><span><b>Cópia dos dados</b><span class="small muted" id="ajSum-backup"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button></div>
+      <div class="ajlist"><button type="button" class="ajitem" data-aj="clientes"><span><b>Clientes e máquinas</b><span class="small muted" id="ajSum-clientes"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="tipos"><span><b>Tipos de serviço</b><span class="small muted" id="ajSum-tipos"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="categorias"><span><b>Categorias de falha</b><span class="small muted" id="ajSum-categorias"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="empresa"><span><b>Empresa</b><span class="small muted" id="ajSum-empresa"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="valores"><span><b>Valores</b><span class="small muted" id="ajSum-valores"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="motivos"><span><b>Motivos de pausa</b><span class="small muted" id="ajSum-motivos"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="checklist"><span><b>Checklist</b><span class="small muted" id="ajSum-checklist"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="conta"><span><b>Conta</b><span class="small muted" id="ajSum-conta"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="backup"><span><b>Cópia dos dados</b><span class="small muted" id="ajSum-backup"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button></div>
     </div>
     <div class="ajpanel" data-aj="empresa" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Empresa</h2>
       <label class="f" for="cfgNome">Nome da empresa<input id="cfgNome"></label>
@@ -408,6 +408,10 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
     <div class="ajpanel" data-aj="tipos" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Tipos de serviço</h2>
       <div class="list" id="tiposList"></div>
       <div class="row"><input id="tipoNew" placeholder="Novo tipo" style="flex:1;min-width:180px"><button type="button" id="btnTipoAdd">+ Tipo</button></div>
+    </div>
+    <div class="ajpanel" data-aj="categorias" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Categorias de falha</h2>
+      <div class="list" id="catList"></div>
+      <div class="row"><input id="catNew" placeholder="Nova categoria" style="flex:1;min-width:180px"><button type="button" id="btnCatAdd">+ Categoria</button></div>
     </div>
     <div class="ajpanel" data-aj="motivos" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Motivos de pausa</h2>
       <p class="small muted" style="margin:0">Aparecem como opções quando você pausa o atendimento.</p>
@@ -458,6 +462,7 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
       </fieldset>
       <input type="hidden" id="sIni"><input type="hidden" id="sFim"><input type="hidden" id="sHoras"><input type="hidden" id="sKm">
       <fieldset data-tab="servico" data-sub="problema"><legend>Falha</legend>
+        <select id="sCat" aria-label="Categoria da falha"></select>
         <textarea id="sProblema" aria-label="Falha"></textarea>
         <div class="photos" id="photoBoxProb"></div>
       </fieldset>
@@ -587,6 +592,13 @@ function fillTipoSelect(cur) {
   const list = tipos().includes(v) || !v ? tipos() : [...tipos(), v];
   sel.replaceChildren(...list.map(t => el('option', { value: t, selected: t === v }, t)));
   if (!list.length) sel.append(el('option', { value: '' }, 'Cadastre em Ajustes'));
+}
+// Categorias de falha (Ajustes): agrupam as OS no painel do portal do cliente
+const CATS = ['Elétrica', 'Eletrônica', 'Hidráulica', 'Mecânica', 'Motor', 'Transmissão', 'Pneumática', 'Outra'];
+const cats = () => Array.isArray(cfg.categoriasFalha) ? cfg.categoriasFalha : CATS;
+function fillCatSelect(cur) {
+  const list = !cur || cats().includes(cur) ? cats() : [...cats(), cur];
+  $('#sCat').replaceChildren(el('option', { value: '' }, 'Categoria'), ...list.map(t => el('option', { value: t, selected: t === cur }, t)));
 }
 const STATUS = { aberto: 'Agendado', deslocamento: 'Deslocamento', aguardando: 'Aguardando atendimento', andamento: 'Em atendimento', pausada: 'Pausada', concluido: 'Finalizada', faturado: 'Faturado' };
 
@@ -925,7 +937,7 @@ function openSvc(id, preset = {}) {
   idFotos = { fotoHorimetro: a.fotoHorimetro || null, fotoChassi: a.fotoChassi || null };
   fillClientSelect($('#sCliente'), a.clienteId, 'Escolha o cliente');
   fillMachSelect(a.clienteId, a.maquinaId);
-  fillTipoSelect(a.tipo); setStatus(a.status || 'aberto');
+  fillTipoSelect(a.tipo); fillCatSelect(a.categoria || ''); setStatus(a.status || 'aberto');
   $('#sData').value = a.data || today(); $('#sIni').value = a.inicio || ''; $('#sFim').value = a.fim || '';
   $('#sHoras').value = a.horas ?? ''; $('#sKm').value = a.km ?? ''; $('#sHorimetro').value = a.horimetro ?? '';
   $('#sDesc').value = a.descricao || ''; $('#sObsCli').value = a.recomendacao || '';
@@ -1465,7 +1477,7 @@ async function saveSvc(close, silent) {
   const data = { ...prev, id, ...formSvc(),
     clienteId: $('#sCliente').value, maquinaId: $('#sMaquina').value, tipo: $('#sTipo').value, status: $('#sStatus').value,
     data: $('#sData').value, inicio: $('#sIni').value, fim: $('#sFim').value, horimetro: $('#sHorimetro').value ? n($('#sHorimetro').value) : null,
-    problema: $('#sProblema').value.trim(), causa: $('#sCausa').value.trim(), fotosProblema: fotosProb,
+    categoria: $('#sCat').value, problema: $('#sProblema').value.trim(), causa: $('#sCausa').value.trim(), fotosProblema: fotosProb,
     testes: testes.filter(x => x.desc.trim() || x.fotos.length).map(x => ({ desc: x.desc.trim(), fotos: x.fotos })),
     descricao: $('#sDesc').value.trim(), recomendacao: $('#sObsCli').value.trim(),
     pecas: parts.filter(p => (p.desc || '').trim() || n(p.valor)).map(p => ({ desc: (p.desc || '').trim(), qtd: n(p.qtd), valor: n(p.valor) })),
@@ -1727,7 +1739,7 @@ async function buildPdf(a) {
   kv([['Máquina', m ? `${m.tipo} ${m.marca} ${m.modelo}`.trim() : ''], ['Nº de série / chassi', m?.serie], ['Ano', m?.ano], ['Horímetro', a.horimetro ? `${a.horimetro} h` : ''], ['Tipo de serviço', tipoTxt(a.tipo)], ['Data', fmtDate(a.data)]]);
   if (a.fotoHorimetro || a.fotoChassi) await photos([a.fotoHorimetro, a.fotoChassi].filter(Boolean), [a.fotoHorimetro && 'Horímetro', a.fotoChassi && 'Chassi / plaqueta'].filter(Boolean));
 
-  if (a.problema || (a.fotosProblema || []).length) { heading('Falha'); if (a.problema) para(a.problema); await photos(a.fotosProblema || []); }
+  if (a.problema || (a.fotosProblema || []).length) { heading(a.categoria ? `Falha · ${a.categoria}` : 'Falha'); if (a.problema) para(a.problema); await photos(a.fotosProblema || []); }
   if (a.causa) { heading('Causa'); para(a.causa); }
   if (a.descricao) { heading('Solução'); para(a.descricao); }
   if ((a.testes || []).length) {
@@ -1824,11 +1836,11 @@ async function saveFile(filename, data) {
 $('#btnCsv').onclick = () => {
   const q = v => { const x = String(v ?? ''); return /[";\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x; };
   const dec = v => (Number(v) || 0).toFixed(2).replace('.', ',');
-  const head = ['OS', 'Data', 'Cliente', 'Máquina', 'Tipo', 'Situação', 'Horas', 'Km', 'Mão de obra', 'Deslocamento', 'Materiais', 'Total', 'Falha', 'Causa', 'Solução', 'Cuidados'];
+  const head = ['OS', 'Data', 'Cliente', 'Máquina', 'Tipo', 'Situação', 'Horas', 'Km', 'Mão de obra', 'Deslocamento', 'Materiais', 'Total', 'Categoria', 'Falha', 'Causa', 'Solução', 'Cuidados'];
   const rows = Object.values(atend).sort((x, y) => (x.data || '').localeCompare(y.data || '')).map(a => {
     const m = maquinas[a.maquinaId], t = calc(a);
     return [a.numero || '', fmtDate(a.data), clientes[a.clienteId]?.nome, m ? `${m.tipo} ${m.marca} ${m.modelo}`.trim() : '', tipoTxt(a.tipo), STATUS[a.status],
-      dec(a.horas), dec(a.km), dec(t.mo), dec(t.desl), dec(t.pecas), dec(t.total), a.problema, a.causa, a.descricao, a.recomendacao].map(q).join(';');
+      dec(a.horas), dec(a.km), dec(t.mo), dec(t.desl), dec(t.pecas), dec(t.total), a.categoria, a.problema, a.causa, a.descricao, a.recomendacao].map(q).join(';');
   });
   saveFile(`atendimentos-${today()}.csv`, '﻿' + [head.join(';'), ...rows].join('\r\n'));
 };
@@ -1864,6 +1876,19 @@ $('#btnTipoAdd').onclick = () => {
   store.doc('config/geral').set({ ...cfg, tiposServico: [...tipos(), v] }); $('#tipoNew').value = '';
 };
 $('#tipoNew').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#btnTipoAdd').click(); } });
+function renderCatsCfg() {
+  const box = $('#catList'); box.replaceChildren();
+  const cs = cats();
+  if (!cs.length) box.append(el('div', { class: 'small muted' }, 'Nenhuma categoria cadastrada.'));
+  cs.forEach((t, i) => box.append(el('div', { class: 'spread', style: 'border-bottom:1px solid var(--line);padding-block:4px' }, el('span', {}, t),
+    el('button', { type: 'button', class: 'danger', 'aria-label': 'Remover ' + t, style: 'min-height:36px', onclick: () => store.doc('config/geral').set({ ...cfg, categoriasFalha: cs.filter((_, j) => j !== i) }) }, 'Remover'))));
+}
+$('#btnCatAdd').onclick = () => {
+  const v = $('#catNew').value.trim(); if (!v) return toast('Escreva a categoria');
+  if (cats().includes(v)) return toast('Essa categoria já existe');
+  store.doc('config/geral').set({ ...cfg, categoriasFalha: [...cats(), v] }); $('#catNew').value = '';
+};
+$('#catNew').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#btnCatAdd').click(); } });
 let grupoCfg = null, subCfg = null, focoNovo = false; // grupo e subgrupo abertos em Ajustes › Checklist
 function renderChkCfg() {
   const box = $('#chkCfgBox'); if (!box) return;
@@ -1936,11 +1961,12 @@ function renderChkCfg() {
   if (focoNovo) { focoNovo = false; novo.focus(); }
 }
 function renderCfg() {
-  renderMotivos(); renderChkCfg(); renderTiposCfg();
+  renderMotivos(); renderChkCfg(); renderTiposCfg(); renderCatsCfg();
   const qt = (k, t) => { const e = $('#ajSum-' + k); if (e) e.textContent = t; };
   qt('empresa', [cfg.nome, cfg.cnpj].filter(Boolean).join(' · ') || 'Dados da empresa');
   qt('valores', `Hora ${brl(cfg.valorHora || 0)} · km ${brl(cfg.valorKm || 0)}`);
   qt('tipos', tipos().length + ' tipos');
+  qt('categorias', cats().length + ' categorias');
   qt('motivos', motivos().length + ' motivos');
   qt('checklist', chkGrupos().length ? chkGrupos().length + (chkGrupos().length > 1 ? ' grupos' : ' grupo') : 'Nenhum grupo');
   qt('backup', 'Planilha ou cópia completa');
