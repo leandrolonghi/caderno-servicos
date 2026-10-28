@@ -2036,7 +2036,7 @@ conectar();
 #gSheet .gmain > .wrap{display:flex;flex-direction:column;gap:20px;padding-block:12px 16px;max-width:1100px}
 #gSheet header .wrap{max-width:1100px}
 nav.gnav{z-index:26}
-nav.gnav .wrap{grid-template-columns:repeat(5,1fr)}
+nav.gnav .wrap{grid-template-columns:repeat(4,1fr)}
 .kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 20px}
 @media (min-width:760px){.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
 .kpi{display:flex;flex-direction:column;gap:2px;min-width:0}
@@ -2085,7 +2085,6 @@ nav.gnav .wrap{grid-template-columns:repeat(5,1fr)}
 .fcard .top{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
 .fcard .val{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
 .gactions{display:flex;gap:8px;flex-wrap:wrap}
-.copybox{white-space:pre-wrap;font:13px/1.5 var(--mono);background:var(--surface);border-radius:12px;padding:12px;margin:0;user-select:all;overflow-x:auto}
 @media (min-width:900px){#gSheet .list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}}
 </style>
 
@@ -2097,7 +2096,6 @@ nav.gnav .wrap{grid-template-columns:repeat(5,1fr)}
     <button type="button" data-gtab="relatorios"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h8M9 17h8"/></svg>Relatórios</button>
     <button type="button" data-gtab="faturas"><svg viewBox="0 0 24 24"><path d="M5 2h14v20l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>Faturas</button>
     <button type="button" data-gtab="gastos"><svg viewBox="0 0 24 24"><path d="M3 7h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M3 7V6a2 2 0 0 1 2-2h11v3M16 13.5h2"/></svg>Gastos</button>
-    <button type="button" data-gtab="fiscal"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>Fiscal</button>
   </div></nav>
 </div>
 
@@ -2151,14 +2149,14 @@ document.addEventListener('cs:dados', () => {
   if (ae && $('#gBody').contains(ae) && ae.matches('input, textarea, select')) return;
   render();
 });
-const TITLES = { painel: 'Painel', relatorios: 'Relatórios', faturas: 'Faturas', gastos: 'Gastos', fiscal: 'Dados fiscais' };
+const TITLES = { painel: 'Painel', relatorios: 'Relatórios', faturas: 'Faturas', gastos: 'Gastos' };
 function render() {
   document.querySelectorAll('[data-gtab]').forEach(b => b.dataset.gtab === tab ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
   $('#gClose').textContent = sub ? '‹ Voltar' : '‹ Caderno';
   $('#gSaved').textContent = '';
   const body = $('#gBody'); body.replaceChildren();
   $('#gTitle').textContent = TITLES[tab];
-  ({ painel: renderPainel, relatorios: renderRelatorios, faturas: renderFaturas, gastos: renderGastos, fiscal: renderFiscal })[tab](body);
+  ({ painel: renderPainel, relatorios: renderRelatorios, faturas: renderFaturas, gastos: renderGastos })[tab](body);
 }
 
 /* ---------- Painel ---------- */
@@ -2385,6 +2383,7 @@ async function reportPdf(R, r) {
 /* ---------- Faturas ---------- */
 let ffil = 'abertas';
 function renderFaturas(body) {
+  if (sub === 'pagto') return renderPagto(body);
   if (sub && sub.startsWith('nova:')) return renderNova(body, sub.slice(5));
   if (sub && D().faturas[sub]) return renderFatura(body, D().faturas[sub]);
   const { clientes } = D();
@@ -2407,6 +2406,9 @@ function renderFaturas(body) {
         f.status !== 'cancelada' && el('span', { class: 'pill nf-' + (f.nf?.status || 'pendente') }, f.nf?.status === 'emitida' && f.nf.numero ? 'NF ' + f.nf.numero : NFST[f.nf?.status || 'pendente'])),
       el('div', { class: 'meta' }, el('span', {}, 'Emissão ', el('b', {}, fmtDate(f.emissao))), f.status === 'paga' ? el('span', {}, 'Paga em ', el('b', {}, fmtDate(f.pagoEm))) : el('span', {}, 'Vence ', el('b', {}, fmtDate(f.vencimento)))))))
       : el('div', { class: 'empty' }, ffil === 'abertas' ? 'Nenhuma fatura em aberto.' : 'Nenhuma fatura aqui.')));
+  const fi = fis(), pg = el('button', { type: 'button', class: 'ajitem', onclick: () => open('faturas', 'pagto') }, el('span', {}, el('b', {}, 'Dados de pagamento'), el('span', { class: 'small muted' }, [fi.pix ? 'PIX ' + fi.pix : 'PIX não informado', `vence em ${fi.prazo} dias`].join(' · '))), el('svg', { viewBox: '0 0 24 24', class: 'chev' }));
+  pg.querySelector('svg').innerHTML = '<path d="m9 6 6 6-6 6"/>';
+  body.append(el('div', { class: 'ajlist' }, pg));
 }
 const itemOf = a => { const t = calc(a), m = D().maquinas[a.maquinaId]; return { osId: a.id, os: osLabel(a), data: a.data, servico: [tipoTxt(a.tipo), machTxt(m)].filter(Boolean).join(' · '), horas: n(a.horas), km: n(a.km), mo: t.mo, desl: t.desl, pecas: t.pecas, total: t.total }; };
 function renderNova(body, cid) {
@@ -2492,13 +2494,6 @@ function renderFatura(body, f) {
             catch (err) { toast('Arquivo não enviado: ' + (err.message || err.code)); }
           } })));
     }
-    if (nf.status !== 'dispensada') {
-      const pre = el('pre', { class: 'copybox', hidden: true }, nfTexto(f));
-      nfs.append(el('div', { class: 'row' }, el('button', { type: 'button', onclick: async () => {
-        pre.hidden = false;
-        try { await navigator.clipboard.writeText(pre.textContent); toast('Dados copiados'); } catch { const r = document.createRange(); r.selectNodeContents(pre); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast('Texto selecionado, copie com o menu'); }
-      } }, 'Copiar dados para emitir a nota')), pre);
-    }
     body.append(pay, nfs);
   }
   body.append(el('label', { class: 'f', for: 'fObs' }, 'Observações', el('textarea', { id: 'fObs', onchange: e => save({ obs: e.target.value.trim() }) }, f.obs || '')));
@@ -2512,21 +2507,6 @@ function renderFatura(body, f) {
   body.append(el('div', { class: 'gactions' },
     el('button', { type: 'button', class: 'primary', onclick: () => faturaPdf(f.id) }, 'Baixar PDF da fatura'),
     f.status === 'aberta' && cancel));
-}
-function nfTexto(f) {
-  const { clientes, cfg } = D(), c = clientes[f.clienteId] || {}, fi = fis(), it = f.itens || [];
-  const aliq = n(fi.aliqIss), base = n(f.total);
-  const disc = `Serviços de manutenção de máquinas agrícolas conforme ${it.map(x => x.os).join(', ')}: ` +
-    it.map(x => `${x.os} (${fmtDate(x.data)}) ${x.servico}, mão de obra ${fmtH(x.horas)}${x.km ? `, deslocamento ${fmtN(x.km)} km` : ''}`).join('; ') + '.' +
-    (n(f.desconto) > 0 ? ` Desconto concedido ${brl(f.desconto)}.` : '') + ` Referente à fatura ${fatLabel(f)}.`;
-  return [
-    'PRESTADOR', `${cfg.nome || ''}${cfg.cnpj ? ' · CNPJ ' + cfg.cnpj : ''}${fi.im ? ' · IM ' + fi.im : ''}`,
-    '', 'TOMADOR', c.nome || '', c.fazenda ? 'Fazenda ' + c.fazenda : null, c.documento ? 'CPF/CNPJ ' + c.documento : 'CPF/CNPJ: preencher', c.local || null,
-    '', 'SERVIÇO', fi.codServico ? 'Código (LC 116): ' + fi.codServico : 'Código (LC 116): preencher em Gestão › Fiscal', fi.cnae ? 'CNAE: ' + fi.cnae : null,
-    fi.municipio ? 'Local da prestação / município: ' + fi.municipio : null,
-    '', 'DISCRIMINAÇÃO', disc,
-    '', 'VALORES', 'Valor do serviço: ' + brl(base), aliq ? `ISS ${aliq.toLocaleString('pt-BR')}%: ${brl(base * aliq / 100)}` : (fi.regime === 'MEI' ? 'ISS: recolhido no DAS (MEI)' : null),
-  ].filter(x => x != null).join('\n');
 }
 async function faturaPdf(id) {
   if (!window.jspdf?.jsPDF) return toast('O gerador de PDF não carregou. Recarregue o app com internet.');
@@ -2666,23 +2646,19 @@ function renderCatsG(body) {
   body.append(box, el('div', { class: 'row' }, inp, el('button', { type: 'button', onclick: add }, '+ Categoria')));
 }
 
-/* ---------- Dados fiscais ---------- */
-function renderFiscal(body) {
-  const fi = fis(), cfg = D().cfg;
+/* ---------- Dados de pagamento (impressos na fatura) ---------- */
+function renderPagto(body) {
+  $('#gTitle').textContent = 'Dados de pagamento';
+  const fi = fis();
   let t = null;
   const kick = () => { clearTimeout(t); $('#gSaved').textContent = 'Salvando…'; $('#gSaved').dataset.s = ''; t = setTimeout(async () => {
     const v = id => $('#' + id).value.trim();
-    await store.doc('config/geral').set({ ...D().cfg, fiscal: { regime: v('fxReg'), im: v('fxIm'), municipio: v('fxMun'), codServico: v('fxCod'), cnae: v('fxCnae'), aliqIss: n(v('fxIss')), prazo: n(v('fxPrazo')) || 15, pix: v('fxPix'), banco: v('fxBanco') } });
+    await store.doc('config/geral').set({ ...D().cfg, fiscal: { ...(D().cfg.fiscal || {}), prazo: n(v('fxPrazo')) || 15, pix: v('fxPix'), banco: v('fxBanco') } });
     $('#gSaved').textContent = '✓ Salvo'; $('#gSaved').dataset.s = 'ok';
   }, 700); };
-  const inp = (id, label, val, extra = {}) => el('label', { class: 'f', for: id }, label, el('input', { id, value: val ?? '', oninput: kick, ...extra }));
   body.append(
-    el('div', { class: 'meta' }, el('span', {}, el('b', {}, cfg.nome || 'Empresa sem nome')), el('span', {}, cfg.cnpj ? 'CNPJ ' + cfg.cnpj : 'CNPJ não informado (Ajustes › Empresa)')),
-    el('label', { class: 'f', for: 'fxReg' }, 'Regime tributário', el('select', { id: 'fxReg', onchange: kick }, ['', 'MEI', 'Simples Nacional', 'Lucro presumido'].map(x => el('option', { value: x, selected: x === (fi.regime || '') }, x || 'Escolha')))),
-    el('div', { class: 'grid2' }, inp('fxIm', 'Inscrição municipal', fi.im, { inputmode: 'numeric' }), inp('fxMun', 'Município de emissão', fi.municipio)),
-    el('div', { class: 'grid2' }, inp('fxCod', 'Código do serviço (LC 116)', fi.codServico, { placeholder: '14.01' }), inp('fxCnae', 'CNAE', fi.cnae, { placeholder: '3314-7/12' })),
-    el('div', { class: 'grid2' }, inp('fxIss', 'Alíquota do ISS (%)', fi.aliqIss || '', { type: 'number', inputmode: 'decimal', step: '0.01', min: '0' }), inp('fxPrazo', 'Prazo para vencimento (dias)', fi.prazo, { type: 'number', inputmode: 'numeric', min: '0' })),
-    inp('fxPix', 'Chave PIX', fi.pix),
+    el('label', { class: 'f', for: 'fxPrazo' }, 'Prazo para vencimento (dias)', el('input', { id: 'fxPrazo', type: 'number', inputmode: 'numeric', min: '0', value: fi.prazo ?? '', oninput: kick })),
+    el('label', { class: 'f', for: 'fxPix' }, 'Chave PIX', el('input', { id: 'fxPix', value: fi.pix || '', oninput: kick })),
     el('label', { class: 'f', for: 'fxBanco' }, 'Dados bancários', el('textarea', { id: 'fxBanco', oninput: kick }, fi.banco || '')));
 }
 
