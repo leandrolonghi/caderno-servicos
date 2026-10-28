@@ -497,7 +497,7 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
         <div id="sigBox"></div>
       </fieldset>
       <fieldset id="reportBox" data-tab="fechar" hidden><legend>Enviar para o cliente</legend>
-        <div class="row"><button type="button" class="primary" id="btnPdf">Gerar PDF da OS</button><button type="button" id="btnReport">Copiar resumo em texto</button></div>
+        <div class="row"><button type="button" class="primary" id="btnPdf">Gerar PDF da OS</button><button type="button" id="btnMail">Enviar por e-mail</button><button type="button" id="btnReport">Copiar resumo em texto</button></div>
         <pre class="copy" id="reportPre" hidden></pre>
       </fieldset>
       <div class="row" id="delRow" data-tab="fechar" hidden><button type="button" class="danger" id="btnDelSvc">Excluir atendimento</button></div>
@@ -1818,18 +1818,56 @@ async function buildPdf(a) {
   }
   return doc;
 }
-$('#btnPdf').onclick = async e => {
-  const b = e.currentTarget;
+async function osPdf() {
+  await svcAuto.flush();
+  const a = await saveSvc(false) || atend[editingSvc]; if (!a) return null;
+  const doc = await buildPdf(a);
+  const cli = (clientes[a.clienteId]?.nome || 'cliente').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
+  return { a, name: `${osLabel(a).replace(' ', '-')}-${cli}.pdf`, blob: doc.output('blob') };
+}
+async function pdfBtn(b, label, fn) {
   if (!window.jspdf?.jsPDF) return toast('O gerador de PDF não carregou. Recarregue o app com internet.');
   b.disabled = true; b.textContent = 'Gerando PDF…';
-  try {
-    await svcAuto.flush();
-    const a = await saveSvc(false) || atend[editingSvc]; if (!a) return;
-    const doc = await buildPdf(a);
-    const cli = (clientes[a.clienteId]?.nome || 'cliente').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
-    await saveFile(`${osLabel(a).replace(' ', '-')}-${cli}.pdf`, doc.output('blob'));
-  } catch (err) { toast('Não foi possível gerar o PDF: ' + (err.message || err)); }
-  finally { b.disabled = false; b.textContent = 'Gerar PDF da OS'; }
+  try { const r = await osPdf(); if (r) await fn(r); }
+  catch (err) { if (err?.name !== 'AbortError') toast('Não foi possível gerar o PDF: ' + (err.message || err)); }
+  finally { b.disabled = false; b.textContent = label; }
+}
+$('#btnPdf').onclick = e => pdfBtn(e.currentTarget, 'Gerar PDF da OS', r => saveFile(r.name, r.blob));
+// E-mail: no celular o PDF vai anexado pelo compartilhar (escolher Gmail);
+// no computador o PDF é baixado e o Gmail abre com destinatário, assunto e texto prontos.
+// Gerar o PDF demora; se o navegador recusar o compartilhar depois da espera, o botão pede um segundo toque.
+let mailPronto = null;
+$('#btnMail').onclick = e => {
+  const b = e.currentTarget, LBL = 'Enviar por e-mail';
+  if (mailPronto && mailPronto.os === editingSvc && Date.now() - mailPronto.em < 120000) {
+    const { data } = mailPronto; mailPronto = null; b.textContent = LBL;
+    navigator.share(data).catch(err => { if (err?.name !== 'AbortError') toast('Não foi possível compartilhar: ' + (err.message || err)); });
+    return;
+  }
+  mailPronto = null;
+  const share = !!navigator.canShare?.({ files: [new File(['%PDF'], 'os.pdf', { type: 'application/pdf' })] });
+  const win = share ? null : window.open('about:blank', '_blank');
+  pdfBtn(b, LBL, async ({ a, name, blob }) => {
+    const c = clientes[a.clienteId] || {}, m = maquinas[a.maquinaId], mq = m ? [m.tipo, m.marca, m.modelo].filter(Boolean).join(' ') : '';
+    const su = `${osLabel(a)}${cfg.nome ? ' · ' + cfg.nome : ''}`;
+    const body = `Olá${c.nome ? ', ' + c.nome : ''}.\n\nSegue em anexo a ${osLabel(a)}${mq ? ' (' + mq + ')' : ''}.\nVocê também pode acompanhar pelo portal: ${portalUrl(a.id)}\n\nQualquer dúvida, estou à disposição.`;
+    if (share) {
+      const data = { files: [new File([blob], name, { type: 'application/pdf' })], title: su, text: body };
+      try { await navigator.share(data); }
+      catch (err) {
+        if (err?.name !== 'NotAllowedError') throw err;
+        mailPronto = { os: editingSvc, em: Date.now(), data };
+        setTimeout(() => { b.textContent = 'Toque de novo para enviar'; });
+      }
+      return;
+    }
+    let to = acessoCli[a.clienteId]?.[0]?.login || '';
+    if (!to) try { to = (acessoCli[a.clienteId] = await Nuvem.acessos(a.clienteId))?.[0]?.login || ''; } catch {}
+    await saveFile(name, blob);
+    const url = 'https://mail.google.com/mail/?view=cm&fs=1' + (to ? '&to=' + encodeURIComponent(to) : '') + '&su=' + encodeURIComponent(su) + '&body=' + encodeURIComponent(body);
+    if (win) { win.location.href = url; win.aberto = true; } else window.open(url, '_blank');
+    toast('PDF baixado. Arraste o arquivo para o e-mail no Gmail.');
+  }).finally(() => { if (win && !win.aberto) win.close(); });
 };
 
 /* ---------- Cópia dos dados ---------- */
