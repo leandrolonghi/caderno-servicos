@@ -646,10 +646,11 @@ const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 };
-const COLS = { clientes: 'c', maquinas: 'm', atendimentos: 'a', faturas: 'f' };
+const COLS = { clientes: 'c', maquinas: 'm', atendimentos: 'a', faturas: 'f', gastos: 'g' };
 let server = LS.get('cs-cache', null) || { clientes: {}, maquinas: {}, atendimentos: {}, config: null };
 if (!server.faturas) server.faturas = {};
-let faturas = {};
+if (!server.gastos) server.gastos = {};
+let faturas = {}, gastos = {};
 let outbox = LS.get('cs-outbox', []);
 let syncing = false, lastSyncOk = true;
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej({ code: 'timeout' }), ms))]);
@@ -664,9 +665,9 @@ function applyOp(state, op) {
   else m[id] = { ...op.data, id };
 }
 function recompute() {
-  const st = { clientes: { ...server.clientes }, maquinas: { ...server.maquinas }, atendimentos: { ...server.atendimentos }, faturas: { ...server.faturas }, config: server.config };
+  const st = { clientes: { ...server.clientes }, maquinas: { ...server.maquinas }, atendimentos: { ...server.atendimentos }, faturas: { ...server.faturas }, gastos: { ...server.gastos }, config: server.config };
   for (const op of outbox) applyOp(st, op);
-  clientes = st.clientes; maquinas = st.maquinas; atend = st.atendimentos; faturas = st.faturas;
+  clientes = st.clientes; maquinas = st.maquinas; atend = st.atendimentos; faturas = st.faturas; gastos = st.gastos;
   const nc = { valorHora: 0, valorKm: 0, nome: '', pagamento: '', ...(st.config || {}) };
   if (JSON.stringify(nc) !== JSON.stringify(cfg) || !recompute.done) { cfg = nc; renderCfg(); recompute.done = true; }
   rerender(); renderSync();
@@ -714,6 +715,7 @@ async function flushPhotos() {
     const realId = (await withTimeout(assets.upload(blob), 60000)).id;
     outbox = swapRef(outbox, k, realId); LS.set('cs-outbox', outbox);
     for (const a of Object.values(atend)) if (JSON.stringify(a).includes(k)) store.doc('atendimentos/' + a.id).set(swapRef(a, k, realId));
+    for (const g of Object.values(gastos)) if (JSON.stringify(g).includes(k)) store.doc('gastos/' + g.id).set(swapRef(g, k, realId));
     photos = swapRef(photos, k, realId); fotosProb = swapRef(fotosProb, k, realId); testes = swapRef(testes, k, realId); idFotos = swapRef(idFotos, k, realId); sig = swapRef(sig, k, realId); chk = swapRef(chk, k, realId);
     if (JSON.stringify(cfg).includes(k)) store.doc('config/geral').set(swapRef(cfg, k, realId));
     if (objUrls[k]) objUrls[realId] = objUrls[k];
@@ -1849,7 +1851,7 @@ $('#btnCsv').onclick = () => {
   });
   saveFile(`atendimentos-${today()}.csv`, '﻿' + [head.join(';'), ...rows].join('\r\n'));
 };
-$('#btnJson').onclick = () => saveFile(`caderno-servicos-${today()}.json`, JSON.stringify({ exportadoEm: new Date().toISOString(), config: cfg, clientes, maquinas, atendimentos: atend }, null, 2));
+$('#btnJson').onclick = () => saveFile(`caderno-servicos-${today()}.json`, JSON.stringify({ exportadoEm: new Date().toISOString(), config: cfg, clientes, maquinas, atendimentos: atend, faturas, gastos }, null, 2));
 
 /* ---------- Ajustes ---------- */
 function renderMotivos() {
@@ -1996,8 +1998,8 @@ $('#cliBack').onclick = () => show('v-ajustes');
 document.querySelectorAll('.ajback').forEach(b => b.addEventListener('click', async () => { await cfgAuto.flush(); showAj(''); }));
 
 // Módulo de gestão (relatórios e faturamento) usa os mesmos dados e a mesma fila de envio
-window.CS = { $, el, brl, n, fmtDate, today, newId, store, calc, saveFile, toast, tipoTxt, tipos, cliLabel, osLabel, maskDoc, STATUS, uploadImg, renderSync, openSvc,
-  get data() { return { clientes, maquinas, atend, faturas, cfg }; } };
+window.CS = { $, el, brl, n, fmtDate, today, newId, store, calc, saveFile, toast, tipoTxt, tipos, cliLabel, osLabel, maskDoc, STATUS, uploadImg, shrink, imgOf, pickers, renderSync, openSvc,
+  get data() { return { clientes, maquinas, atend, faturas, gastos, cfg }; } };
 function rerender() { renderAtend(); renderClients(); $('#ajSum-clientes').textContent = Object.keys(clientes).length + ' cliente(s)'; }
 
 /* ---------- Conexão com o armazenamento ---------- */
@@ -2034,7 +2036,7 @@ conectar();
 #gSheet .gmain > .wrap{display:flex;flex-direction:column;gap:20px;padding-block:12px 16px;max-width:1100px}
 #gSheet header .wrap{max-width:1100px}
 nav.gnav{z-index:26}
-nav.gnav .wrap{grid-template-columns:repeat(4,1fr)}
+nav.gnav .wrap{grid-template-columns:repeat(5,1fr)}
 .kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 20px}
 @media (min-width:760px){.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
 .kpi{display:flex;flex-direction:column;gap:2px;min-width:0}
@@ -2042,6 +2044,13 @@ nav.gnav .wrap{grid-template-columns:repeat(4,1fr)}
 .kpi b{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .kpi small{font-size:12px;color:var(--muted)}
 .kpi.alert b{color:var(--bad)}
+.kpi.good b{color:var(--ok)}
+.veredito{font-weight:600;margin:0}
+.veredito.lucro{color:var(--ok)}
+.veredito.prejuizo{color:var(--bad)}
+.gcard .top{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.gcard .val{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.catrow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;border-bottom:1px solid var(--line);padding-block:4px}
 .chartbox{background:var(--surface);border-radius:14px;padding:14px 12px 6px;position:relative;display:flex;flex-direction:column;gap:6px}
 .chartbox svg{width:100%;height:auto;display:block;overflow:visible}
 .chartbox .ax{fill:var(--muted);font:500 11px var(--body)}
@@ -2087,6 +2096,7 @@ nav.gnav .wrap{grid-template-columns:repeat(4,1fr)}
     <button type="button" data-gtab="painel"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Painel</button>
     <button type="button" data-gtab="relatorios"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h8M9 17h8"/></svg>Relatórios</button>
     <button type="button" data-gtab="faturas"><svg viewBox="0 0 24 24"><path d="M5 2h14v20l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>Faturas</button>
+    <button type="button" data-gtab="gastos"><svg viewBox="0 0 24 24"><path d="M3 7h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M3 7V6a2 2 0 0 1 2-2h11v3M16 13.5h2"/></svg>Gastos</button>
     <button type="button" data-gtab="fiscal"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>Fiscal</button>
   </div></nav>
 </div>
@@ -2131,9 +2141,9 @@ const osDone = () => Object.values(D().atend).filter(a => done(a) && inR(a.data)
 
 /* ---------- Navegação ---------- */
 let tab = 'painel', sub = null;
-function open(t = tab, s = null) { tab = t; sub = s; $('#gSheet').hidden = false; document.body.classList.add('noscroll'); render(); $('#gSheet').scrollTop = 0; }
+function open(t = tab, s = null) { sairGasto(); tab = t; sub = s; $('#gSheet').hidden = false; document.body.classList.add('noscroll'); render(); $('#gSheet').scrollTop = 0; }
 $('#btnGestao').onclick = () => open('painel');
-$('#gClose').onclick = () => { if (sub) { sub = null; render(); $('#gSheet').scrollTop = 0; } else { $('#gSheet').hidden = true; document.body.classList.remove('noscroll'); } };
+$('#gClose').onclick = () => { sairGasto(); if (sub) { sub = null; render(); $('#gSheet').scrollTop = 0; } else { $('#gSheet').hidden = true; document.body.classList.remove('noscroll'); } };
 document.querySelectorAll('[data-gtab]').forEach(b => b.addEventListener('click', () => open(b.dataset.gtab)));
 document.addEventListener('cs:dados', () => {
   if ($('#gSheet').hidden) return;
@@ -2141,14 +2151,14 @@ document.addEventListener('cs:dados', () => {
   if (ae && $('#gBody').contains(ae) && ae.matches('input, textarea, select')) return;
   render();
 });
-const TITLES = { painel: 'Painel', relatorios: 'Relatórios', faturas: 'Faturas', fiscal: 'Dados fiscais' };
+const TITLES = { painel: 'Painel', relatorios: 'Relatórios', faturas: 'Faturas', gastos: 'Gastos', fiscal: 'Dados fiscais' };
 function render() {
   document.querySelectorAll('[data-gtab]').forEach(b => b.dataset.gtab === tab ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
   $('#gClose').textContent = sub ? '‹ Voltar' : '‹ Caderno';
   $('#gSaved').textContent = '';
   const body = $('#gBody'); body.replaceChildren();
   $('#gTitle').textContent = TITLES[tab];
-  ({ painel: renderPainel, relatorios: renderRelatorios, faturas: renderFaturas, fiscal: renderFiscal })[tab](body);
+  ({ painel: renderPainel, relatorios: renderRelatorios, faturas: renderFaturas, gastos: renderGastos, fiscal: renderFiscal })[tab](body);
 }
 
 /* ---------- Painel ---------- */
@@ -2275,6 +2285,25 @@ const REPORTS = {
     return { head: ['Fatura', 'Cliente', 'Emissão', 'Vencimento', 'Situação', 'Nota fiscal', 'Valor'], right: [6],
       rows: l.map(f => [fatLabel(f), clientes[f.clienteId]?.nome || '', fmtDate(f.emissao), fmtDate(f.vencimento), FST[fatStatus(f)], f.nf?.status === 'emitida' ? 'Nº ' + (f.nf.numero || '') : NFST[f.nf?.status || 'pendente'], brl(f.total)]),
       foot: ['Total', '', '', '', '', '', brl(l.filter(f => f.status !== 'cancelada').reduce((s, f) => s + n(f.total), 0))] };
+  } },
+  gastos: { t: 'Gastos', d: 'Gastos do período por data e categoria', build() {
+    const l = gastosR().sort((x, y) => (x.data || '').localeCompare(y.data || ''));
+    return { head: ['Data', 'Categoria', 'Descrição', 'Carro', 'Valor'], right: [4],
+      rows: l.map(g => [fmtDate(g.data), g.categoria || 'Sem categoria', g.descricao || '', ehCarro(g) ? 'Sim' : '', brl(g.valor)]), foot: ['Total', '', '', '', brl(l.reduce((s, g) => s + n(g.valor), 0))] };
+  } },
+  resultado: { t: 'Resultado por mês', d: 'Serviços, gastos, lucro e custo do carro por km', build() {
+    const os = osDone(), gs = gastosR();
+    const keys = [...new Set([...os.map(a => (a.data || '').slice(0, 7)), ...gs.map(g => (g.data || '').slice(0, 7))])].filter(Boolean).sort();
+    const rows = keys.map(k => {
+      const o = os.filter(a => (a.data || '').startsWith(k)), g = gs.filter(x => (x.data || '').startsWith(k));
+      const serv = o.reduce((s, a) => s + calc(a).total, 0), gas = g.reduce((s, x) => s + n(x.valor), 0), km = o.reduce((s, a) => s + n(a.km), 0), car = g.filter(ehCarro).reduce((s, x) => s + n(x.valor), 0);
+      return { k, serv, gas, km, car };
+    });
+    const t = rows.reduce((s, r) => ({ serv: s.serv + r.serv, gas: s.gas + r.gas, km: s.km + r.km, car: s.car + r.car }), { serv: 0, gas: 0, km: 0, car: 0 });
+    const ckm = r => r.km ? brl(r.car / r.km) : '';
+    return { head: ['Mês', 'Serviços', 'Gastos', 'Resultado', 'Km', 'Gastos do carro', 'Custo por km'], right: [1, 2, 3, 4, 5, 6],
+      rows: rows.map(r => [ymTxt(r.k), brl(r.serv), brl(r.gas), brl(r.serv - r.gas), fmtN(r.km), brl(r.car), ckm(r)]),
+      foot: ['Total', brl(t.serv), brl(t.gas), brl(t.serv - t.gas), fmtN(t.km), brl(t.car), ckm(t)] };
   } },
   receber: { t: 'Contas a receber', d: 'Faturas em aberto e vencidas (todas as datas)', all: true, build() {
     const { clientes } = D(), l = fats().filter(f => f.status === 'aberta').sort((x, y) => (x.vencimento || '').localeCompare(y.vencimento || ''));
@@ -2523,6 +2552,118 @@ async function faturaPdf(id) {
   ctx.para(f.nf?.status === 'emitida' && f.nf.numero ? `Nota fiscal nº ${f.nf.numero}${f.nf.data ? ' emitida em ' + fmtDate(f.nf.data) : ''}${f.nf.codigo ? ' · código de verificação ' + f.nf.codigo : ''}.` : 'Este documento não é nota fiscal.', 8.5, MUT);
   ctx.footer(`${cfg.nome || 'Longhi Manutenções'} · ${fatLabel(f)} · ${c.nome || ''}`);
   await saveFile(`${fatLabel(f).replace(' ', '-')}-${slug(c.nome || 'cliente')}.pdf`, doc.output('blob'));
+}
+
+
+/* ---------- Gastos da empresa ----------
+   Cada gasto tem uma categoria; as categorias marcadas como "carro" entram
+   no custo por km, comparado com o valor do km cobrado nas OS. */
+const CATG = [['Combustível', true], ['Manutenção do carro', true], ['Pneus', true], ['Seguro, IPVA e licenciamento', true], ['Pedágio e estacionamento', true],
+  ['Ferramentas', false], ['Materiais e peças', false], ['Alimentação e hospedagem', false], ['Telefone e internet', false], ['Impostos e taxas', false], ['Outros', false]].map(([nome, carro]) => ({ nome, carro }));
+const catsG = () => Array.isArray(D().cfg.categoriasGasto) ? D().cfg.categoriasGasto : CATG;
+const ehCarro = g => { const c = catsG().find(c => c.nome === g.categoria); return c ? !!c.carro : !!g.carro; };
+const gastosR = () => Object.values(D().gastos || {}).filter(g => inR(g.data));
+let gFlush = () => {};
+const sairGasto = () => { gFlush(); for (const k in gDraft) delete gDraft[k]; };
+function renderGastos(body) {
+  if (sub === 'cats') return renderCatsG(body);
+  if (sub && sub.startsWith('g:')) return renderGasto(body, sub.slice(2));
+  const gs = gastosR(), os = osDone();
+  const tot = gs.reduce((s, g) => s + n(g.valor), 0), car = gs.filter(ehCarro).reduce((s, g) => s + n(g.valor), 0);
+  const km = os.reduce((s, a) => s + n(a.km), 0), cobrado = os.reduce((s, a) => s + calc(a).desl, 0), serv = os.reduce((s, a) => s + calc(a).total, 0);
+  const vk = n(D().cfg.valorKm), ckm = km ? car / km : 0, resKm = cobrado - car, res = serv - tot;
+  const kpi = (lbl, v, sm, cls) => el('div', { class: 'kpi' + (cls ? ' ' + cls : '') }, el('span', {}, lbl), el('b', {}, v), sm && el('small', {}, sm));
+  const lp = v => v >= 0 ? 'good' : 'alert', lpTxt = v => v >= 0 ? 'Lucro' : 'Prejuízo';
+  const sobra = vk - ckm;
+  const veredito = !km ? null : !car ? el('p', { class: 'veredito small muted' }, 'Sem gastos do carro neste período.')
+    : el('p', { class: 'veredito ' + (sobra >= 0 ? 'lucro' : 'prejuizo') },
+      `Você cobra ${brl(vk)} por km e o carro custa ${brl(ckm)} por km: ${sobra >= 0 ? 'sobram' : 'faltam'} ${brl(Math.abs(sobra))} por km.`);
+  body.append(perChips(),
+    el('div', {}, el('button', { type: 'button', class: 'primary', onclick: () => open('gastos', 'g:' + newId()) }, '+ Novo gasto')),
+    el('div', { class: 'gsec' }, el('h3', {}, 'Carro e km'),
+      el('div', { class: 'kpis' },
+        kpi('Gastos com o carro', brl(car), `${gs.filter(ehCarro).length} lançamento${gs.filter(ehCarro).length === 1 ? '' : 's'}`),
+        kpi('Km rodados nas OS', fmtN(km) + ' km', `cobrado ${brl(cobrado)}`),
+        kpi('Custo por km', km ? brl(ckm) : '—', `cobra ${brl(vk)} por km`),
+        kpi(lpTxt(resKm) + ' no km', brl(Math.abs(resKm)), 'cobrado menos gastos do carro', km || car ? lp(resKm) : '')),
+      veredito),
+    el('div', { class: 'gsec' }, el('h3', {}, 'Empresa'),
+      el('div', { class: 'kpis' },
+        kpi('Serviços realizados', brl(serv), `${os.length} OS finalizada${os.length === 1 ? '' : 's'}`),
+        kpi('Gastos totais', brl(tot), `${gs.length} lançamento${gs.length === 1 ? '' : 's'}`),
+        kpi(lpTxt(res), brl(Math.abs(res)), 'serviços menos gastos', serv || tot ? lp(res) : ''))));
+  const byCat = sumBy(gs, g => g.categoria || 'Sem categoria', (k, l) => ({ k, n: l.length, v: l.reduce((s, g) => s + n(g.valor), 0) })).sort((x, y) => y.v - x.v);
+  if (byCat.length) body.append(el('div', { class: 'gsec' }, el('h3', {}, 'Por categoria'),
+    tableEl(['Categoria', 'Lançamentos', 'Valor', '%'], byCat.map(r => [r.k, r.n, brl(r.v), pct(r.v, tot)]), [1, 2, 3], ['Total', gs.length, brl(tot), tot ? '100%' : ''])));
+  const l = [...gs].sort((x, y) => (y.data || '').localeCompare(x.data || '') || (y.criadoEm || 0) - (x.criadoEm || 0));
+  body.append(el('div', { class: 'gsec' }, el('h3', {}, 'Lançamentos'),
+    l.length ? el('div', { class: 'list' }, l.map(g => el('button', { type: 'button', class: 'card tap gcard', onclick: () => open('gastos', 'g:' + g.id) },
+      el('div', { class: 'top' }, el('span', { class: 'title', style: 'font-weight:600' }, g.categoria || 'Sem categoria'), el('span', { class: 'val' }, brl(g.valor))),
+      el('div', { class: 'meta' }, el('span', {}, fmtDate(g.data)), g.descricao && el('span', {}, g.descricao)))))
+      : el('div', { class: 'empty' }, 'Nenhum gasto neste período.')));
+  const cat = el('button', { type: 'button', class: 'ajitem', onclick: () => open('gastos', 'cats') }, el('span', {}, el('b', {}, 'Categorias de gasto'), el('span', { class: 'small muted' }, catsG().length + ' categorias')), el('svg', { viewBox: '0 0 24 24', class: 'chev' }));
+  cat.querySelector('svg').innerHTML = '<path d="m9 6 6 6-6 6"/>';
+  body.append(el('div', { class: 'ajlist' }, cat));
+}
+const gDraft = {};
+function renderGasto(body, id) {
+  const saved = D().gastos[id];
+  const g = { ...(gDraft[id] || saved || { id, data: today(), categoria: catsG()[0]?.nome || '', descricao: '', valor: '', foto: null }) };
+  gDraft[id] = g;
+  $('#gTitle').textContent = saved ? 'Gasto' : 'Novo gasto';
+  let t = null;
+  const save = () => {
+    clearTimeout(t); t = null; gFlush = () => {};
+    const ex = !!D().gastos[id];
+    if (!ex && !n(g.valor) && !g.descricao && !g.foto) return;
+    const c = catsG().find(c => c.nome === g.categoria);
+    store.doc('gastos/' + id).set({ ...g, valor: n(g.valor), carro: c ? !!c.carro : !!g.carro, criadoEm: D().gastos[id]?.criadoEm || Date.now(), atualizadoEm: Date.now() });
+    $('#gSaved').textContent = '✓ Salvo'; $('#gSaved').dataset.s = 'ok';
+  };
+  const kick = () => { $('#gSaved').textContent = 'Salvando…'; $('#gSaved').dataset.s = ''; clearTimeout(t); t = setTimeout(save, 700); gFlush = save; };
+  const cs = catsG(), opts = cs.some(c => c.nome === g.categoria) || !g.categoria ? cs : [...cs, { nome: g.categoria }];
+  const foto = el('div', { class: 'photos' });
+  const drawFoto = () => {
+    foto.replaceChildren();
+    if (g.foto) foto.append(el('div', { class: 'photo' }, CS.imgOf(g.foto, { alt: 'Comprovante', onclick: e => { if (e.target.src) window.open(e.target.src, '_blank'); } }),
+      el('button', { type: 'button', onclick: () => { g.foto = null; drawFoto(); save(); } }, 'Tirar')));
+    else foto.append(...CS.pickers('gFoto', false, async e => {
+      const f = e.target.files[0]; if (!f) return;
+      toast('Enviando foto…');
+      try { g.foto = await CS.uploadImg(await CS.shrink(f)); drawFoto(); save(); toast('Foto salva'); }
+      catch (err) { toast('A foto não foi enviada: ' + (err.message || err.code)); }
+    }, 'addphoto'));
+  };
+  drawFoto();
+  body.append(
+    el('label', { class: 'f', for: 'gValor' }, 'Valor (R$)', el('input', { id: 'gValor', type: 'number', inputmode: 'decimal', step: '0.01', min: '0', value: g.valor === '' ? '' : n(g.valor), oninput: e => { g.valor = e.target.value; kick(); } })),
+    el('div', { class: 'grid2' },
+      el('label', { class: 'f', for: 'gData' }, 'Data', el('input', { id: 'gData', type: 'date', value: g.data || today(), onchange: e => { g.data = e.target.value || today(); save(); } })),
+      el('label', { class: 'f', for: 'gCat' }, 'Categoria', el('select', { id: 'gCat', onchange: e => { g.categoria = e.target.value; save(); } }, opts.map(c => el('option', { value: c.nome, selected: c.nome === g.categoria }, c.nome))))),
+    el('label', { class: 'f', for: 'gDesc' }, 'Descrição', el('input', { id: 'gDesc', value: g.descricao || '', oninput: e => { g.descricao = e.target.value.trim(); kick(); } })),
+    el('div', { class: 'f' }, 'Comprovante', foto));
+  if (saved) {
+    const del = el('button', { type: 'button', class: 'danger', onclick: e => {
+      const b = e.currentTarget;
+      if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Toque de novo para excluir'; return; }
+      clearTimeout(t); gFlush = () => {}; delete gDraft[id];
+      store.doc('gastos/' + id).delete(); toast('Gasto excluído'); sub = null; render();
+    } }, 'Excluir gasto');
+    body.append(el('div', { class: 'gactions' }, del));
+  }
+  if (!saved) setTimeout(() => $('#gValor')?.focus(), 50);
+}
+function renderCatsG(body) {
+  $('#gTitle').textContent = 'Categorias de gasto';
+  const cs = catsG(), salvar = l => store.doc('config/geral').set({ ...D().cfg, categoriasGasto: l });
+  const box = el('div', { class: 'list' });
+  cs.forEach((c, i) => box.append(el('div', { class: 'catrow' }, el('span', {}, c.nome),
+    el('button', { type: 'button', class: 'chip', 'aria-pressed': String(!!c.carro), onclick: () => salvar(cs.map((x, j) => j === i ? { ...x, carro: !x.carro } : x)) }, 'Carro'),
+    el('button', { type: 'button', class: 'danger', 'aria-label': 'Remover ' + c.nome, style: 'min-height:36px', onclick: () => salvar(cs.filter((_, j) => j !== i)) }, 'Remover'))));
+  const inp = el('input', { id: 'gCatNew', placeholder: 'Nova categoria', style: 'flex:1;min-width:180px' });
+  const add = () => { const v = inp.value.trim(); if (!v) return toast('Escreva a categoria'); if (cs.some(c => c.nome.toLowerCase() === v.toLowerCase())) return toast('Essa categoria já existe'); salvar([...cs, { nome: v, carro: false }]); };
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+  body.append(box, el('div', { class: 'row' }, inp, el('button', { type: 'button', onclick: add }, '+ Categoria')));
 }
 
 /* ---------- Dados fiscais ---------- */
