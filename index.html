@@ -2169,6 +2169,7 @@ function renderPainel(body) {
   const sum = l => l.reduce((s, f) => s + n(f.total), 0);
   const receb = fats().filter(f => f.status === 'paga' && inR(f.pagoEm));
   const emAnd = Object.values(atend).filter(a => !done(a)).length;
+  const gs = gastosR(), gTot = gs.reduce((s, g) => s + n(g.valor), 0), gCar = gs.filter(ehCarro).reduce((s, g) => s + n(g.valor), 0);
   const kpi = (lbl, v, sm, cls) => el('div', { class: 'kpi' + (cls ? ' ' + cls : '') }, el('span', {}, lbl), el('b', {}, v), sm && el('small', {}, sm));
   body.append(perChips(),
     el('div', { class: 'kpis' },
@@ -2179,7 +2180,11 @@ function renderPainel(body) {
       kpi('A faturar', brl(afVal), `${af.length} OS finalizada${af.length === 1 ? '' : 's'}`),
       kpi('A receber', brl(sum(abertas)), `${abertas.length} fatura${abertas.length === 1 ? '' : 's'} em aberto`),
       kpi('Vencidas', brl(sum(venc)), `${venc.length} fatura${venc.length === 1 ? '' : 's'}`, venc.length ? 'alert' : ''),
-      kpi('Em andamento', String(emAnd), 'OS ainda não finalizadas')));
+      kpi('Em andamento', String(emAnd), 'OS ainda não finalizadas'),
+      kpi('Gastos', brl(gTot), `${gs.length} lançamento${gs.length === 1 ? '' : 's'}`),
+      kpi(val - gTot >= 0 ? 'Lucro' : 'Prejuízo', brl(Math.abs(val - gTot)), 'serviços menos gastos', val || gTot ? (val - gTot >= 0 ? 'good' : 'alert') : ''),
+      kpi('Gastos com o carro', brl(gCar), ''),
+      kpi('Custo do carro por km', km ? brl(gCar / km) : '—', `cobra ${brl(n(D().cfg.valorKm))} por km`, km && gCar ? (gCar / km <= n(D().cfg.valorKm) ? 'good' : 'alert') : '')));
   body.append(el('div', { class: 'gsec' }, el('h3', {}, 'Serviços realizados por mês'), monthChart()));
   const byCli = {};
   for (const a of os) { const k = a.clienteId; (byCli[k] = byCli[k] || { os: 0, h: 0, v: 0 }); byCli[k].os++; byCli[k].h += n(a.horas); byCli[k].v += calc(a).total; }
