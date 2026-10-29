@@ -368,6 +368,7 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
   <section id="v-atend" class="view"><div class="wrap">
     <div id="dbBanner" class="banner" hidden></div>
     <div class="spread"><h2>Ordens de serviço</h2><span class="small muted" id="atendCount"></span></div>
+    <input id="atendBusca" type="search" placeholder="Buscar" aria-label="Buscar OS por falha, máquina, cliente ou solução" autocomplete="off">
     <div class="list" id="atendList"><div class="empty">Carregando seus atendimentos…</div></div>
   </div></section>
 
@@ -795,20 +796,32 @@ document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click
 }));
 
 /* ---------- Lista de atendimentos ---------- */
+/* Busca nas OS: cada palavra digitada precisa aparecer em algum campo (sem acento, sem maiúscula) */
+const semAcento = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+function textoBusca(a) {
+  const c = clientes[a.clienteId], m = maquinas[a.maquinaId];
+  return semAcento([osLabel(a), a.numero, c?.nome, c?.fazenda, m?.tipo, m?.marca, m?.modelo, m?.serie, tipoTxt(a.tipo), a.categoria, a.problema, a.causa, a.descricao, a.recomendacao,
+    ...(a.pecas || []).map(p => p.desc), ...(a.testes || []).map(t => t.desc)].filter(Boolean).join(' '));
+}
 function renderAtend() {
   const list = $('#atendList');
   if (!loaded.a) return;
-  const items = Object.values(atend)
+  const termos = semAcento($('#atendBusca').value).split(/\s+/).filter(Boolean);
+  const todas = Object.values(atend);
+  const items = todas.filter(a => !termos.length || (t => termos.every(x => t.includes(x)))(textoBusca(a)))
     .sort((x, y) => (y.data || '').localeCompare(x.data || '') || (y.criadoEm || 0) - (x.criadoEm || 0));
-  $('#atendCount').textContent = '';
+  $('#atendCount').textContent = termos.length ? `${items.length} de ${todas.length}` : '';
+  $('#atendBusca').hidden = !todas.length;
   list.replaceChildren();
-  if (!items.length) {
+  if (!todas.length) {
     list.append(el('div', { class: 'empty' }, 'Nenhum atendimento ainda. Toque em “+ Nova OS” para registrar o primeiro serviço.'));
     return;
   }
-  for (const a of items) list.append(svcCard(a));
+  if (!items.length) { list.append(el('div', { class: 'empty' }, 'Nenhuma OS encontrada.')); return; }
+  for (const a of items) list.append(svcCard(a, termos.length > 0));
 }
-function svcCard(a) {
+$('#atendBusca').addEventListener('input', renderAtend);
+function svcCard(a, busca) {
     const c = clientes[a.clienteId], m = maquinas[a.maquinaId];
     return el('button', { type: 'button', class: 'card tap svc', 'data-status': a.status, onclick: () => openSvc(a.id) },
       osLabel(a) && el('div', { class: 'osbig' }, osLabel(a)),
@@ -825,7 +838,8 @@ function svcCard(a) {
         n(a.km) > 0 && el('span', { class: 'num' }, `${n(a.km)} km`),
         (a.fotos || []).length > 0 && el('span', {}, `${a.fotos.length} foto(s)`)),
       isRunning(a) && el('div', { class: 'small live' }, (r => r.tipo === 'trabalho' ? 'Em atendimento agora' : r.tipo === 'pausa' ? `Pausado: ${r.motivo || ''}` : 'Em deslocamento agora')(a.apontamentos.find(x => !x.fim))),
-      (a.problema || a.descricao) && el('div', { class: 'small muted', style: 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }, a.problema || a.descricao));
+      busca ? [a.problema && el('div', { class: 'small' }, el('b', {}, 'Falha: '), a.problema), a.causa && el('div', { class: 'small' }, el('b', {}, 'Causa: '), a.causa), a.descricao && el('div', { class: 'small' }, el('b', {}, 'Solução: '), a.descricao)]
+        : (a.problema || a.descricao) && el('div', { class: 'small muted', style: 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }, a.problema || a.descricao));
 }
 
 
@@ -2157,6 +2171,7 @@ function range(p = per) {
 }
 const inR = iso => { const r = range(); return !!iso && iso >= r[0] && iso <= r[1]; };
 const perTxt = () => PER.find(p => p[0] === per)[1];
+const periodoTxt = () => { const [a, b] = range(); if (per === 'tudo') return 'todas as datas'; const fim = b.slice(0, 8) + String(new Date(+b.slice(0, 4), +b.slice(5, 7), 0).getDate()).padStart(2, '0'); return `${fmtDate(a)} a ${fmtDate(fim)}`; };
 const perChips = () => el('div', { class: 'chips', role: 'group', 'aria-label': 'Período' },
   PER.map(([k, t]) => el('button', { type: 'button', class: 'chip', 'aria-pressed': String(per === k), onclick: () => { per = k; render(); } }, t)));
 const osDone = () => Object.values(D().atend).filter(a => done(a) && inR(a.data));
@@ -2356,6 +2371,29 @@ const REPORTS = {
       rows: l.map(x => [fmtDate(x.data), ehDev(x) ? 'Devolução' : 'Aporte', x.descricao || '', brl(v(x)), brl(vc(x))]),
       foot: ['Total', '', '', brl(l.reduce((s, x) => s + v(x), 0)), brl(l.reduce((s, x) => s + vc(x), 0))] };
   } },
+  contador: { t: 'Resumo para o contador', d: 'Faturamento, notas, recebimentos, gastos e aportes do período', build() {
+    const { clientes } = D(), cli = f => clientes[f.clienteId]?.nome || '', soma = (l, k = 'total') => l.reduce((s, x) => s + n(x[k]), 0), por = k => (x, y) => (x[k] || '').localeCompare(y[k] || '');
+    const os = osDone(), serv = os.reduce((s, a) => s + calc(a).total, 0);
+    const emit = fats().filter(f => inR(f.emissao)).sort(por('emissao')), validas = emit.filter(f => f.status !== 'cancelada');
+    const pagas = fats().filter(f => f.status === 'paga' && inR(f.pagoEm)).sort(por('pagoEm'));
+    const gs = gastosR().sort(por('data')), tg = soma(gs, 'valor');
+    const ap = aportesL().filter(x => inR(x.data)).sort(por('data')), tAp = soma(ap.filter(x => !ehDev(x)), 'valor'), tDev = soma(ap.filter(ehDev), 'valor');
+    const nf = f => f.nf?.status === 'emitida' && f.nf.numero ? 'NF ' + f.nf.numero : NFST[f.nf?.status || 'pendente'];
+    const cats = sumBy(gs, g => g.categoria || 'Sem categoria', (k, l) => [k, l.length, brl(soma(l, 'valor'))]).sort((x, y) => x[0].localeCompare(y[0]));
+    return {
+      resumo: [['Serviços realizados', brl(serv)], ['Faturas emitidas', brl(soma(validas))], ['Recebido', brl(soma(pagas))], ['Gastos', brl(tg)],
+        ['Resultado (serviços menos gastos)', brl(serv - tg)], ['Aportes do dono', brl(tAp)], ['Devoluções ao dono', brl(tDev)]],
+      secoes: [
+        { t: 'Faturas emitidas', head: ['Fatura', 'Emissão', 'Cliente', 'Nota fiscal', 'Situação', 'Valor'], right: [5],
+          rows: emit.map(f => [fatLabel(f), fmtDate(f.emissao), cli(f), nf(f), FST[fatStatus(f)], brl(f.total)]), foot: ['Total', '', '', '', '', brl(soma(validas))] },
+        { t: 'Recebimentos', head: ['Fatura', 'Pago em', 'Cliente', 'Forma', 'Valor'], right: [4],
+          rows: pagas.map(f => [fatLabel(f), fmtDate(f.pagoEm), cli(f), f.forma || '', brl(f.total)]), foot: ['Total', '', '', '', brl(soma(pagas))] },
+        { t: 'Gastos por categoria', head: ['Categoria', 'Lançamentos', 'Valor'], right: [1, 2], rows: cats, foot: ['Total', gs.length, brl(tg)] },
+        { t: 'Gastos', head: ['Data', 'Categoria', 'Descrição', 'Comprovante', 'Valor'], right: [4],
+          rows: gs.map(g => [fmtDate(g.data), g.categoria || '', g.descricao || '', g.foto ? 'Sim' : 'Não', brl(g.valor)]), foot: ['Total', '', '', '', brl(tg)] },
+        { t: 'Aportes e devoluções do dono', head: ['Data', 'Lançamento', 'Descrição', 'Valor'], right: [3],
+          rows: ap.map(x => [fmtDate(x.data), ehDev(x) ? 'Devolução' : 'Aporte', x.descricao || '', brl(x.valor)]) }] };
+  } },
   receber: { t: 'Contas a receber', d: 'Faturas em aberto e vencidas (todas as datas)', all: true, build() {
     const { clientes } = D(), l = fats().filter(f => f.status === 'aberta').sort((x, y) => (x.vencimento || '').localeCompare(y.vencimento || ''));
     const dias = f => { const d = Math.round((new Date(today()) - new Date(f.vencimento)) / 864e5); return d > 0 ? `${d} dia${d > 1 ? 's' : ''} em atraso` : d === 0 ? 'vence hoje' : `vence em ${-d} dia${d < -1 ? 's' : ''}`; };
@@ -2375,15 +2413,21 @@ function renderReport(body, k) {
   const R = REPORTS[k], r = R.build();
   $('#gTitle').textContent = R.t;
   if (!R.all) body.append(perChips());
-  body.append(r.rows.length ? tableEl(r.head, r.rows, r.right, r.foot) : el('div', { class: 'empty' }, 'Nada registrado neste período.'));
+  // relatório com várias partes (resumo para o contador)
+  const temDados = r.secoes ? r.secoes.some(x => x.rows.length) : r.rows.length;
+  if (r.secoes) body.append(
+    el('div', { class: 'kpis' }, r.resumo.map(([l, v]) => el('div', { class: 'kpi' }, el('span', {}, l), el('b', {}, v)))),
+    ...r.secoes.map(x => el('div', { class: 'gsec' }, el('h3', {}, x.t), x.rows.length ? tableEl(x.head, x.rows, x.right, x.foot) : el('div', { class: 'empty' }, 'Nada neste período.'))));
+  else body.append(r.rows.length ? tableEl(r.head, r.rows, r.right, r.foot) : el('div', { class: 'empty' }, 'Nada registrado neste período.'));
   body.append(el('div', { class: 'gactions' },
-    el('button', { type: 'button', class: 'primary', disabled: !r.rows.length, onclick: () => reportPdf(R, r) }, 'Baixar PDF'),
-    el('button', { type: 'button', disabled: !r.rows.length, onclick: () => reportCsv(R, r) }, 'Baixar planilha')));
+    el('button', { type: 'button', class: 'primary', disabled: !temDados, onclick: () => reportPdf(R, r) }, 'Baixar PDF'),
+    el('button', { type: 'button', disabled: !temDados, onclick: () => reportCsv(R, r) }, 'Baixar planilha')));
 }
 const slug = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
 function reportCsv(R, r) {
   const q = v => { const x = String(v ?? ''); return /[";\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x; };
-  const lines = [r.head, ...r.rows, ...(r.foot ? [r.foot] : [])].map(l => l.map(q).join(';'));
+  const tab = x => [x.head, ...x.rows, ...(x.foot ? [x.foot] : [])];
+  const lines = (r.secoes ? [...r.resumo, [], ...r.secoes.flatMap(x => [[x.t.toUpperCase()], ...(x.rows.length ? tab(x) : [['Nada neste período']]), []])] : tab(r)).map(l => l.map(q).join(';'));
   saveFile(`${slug(R.t)}-${R.all ? today() : slug(perTxt())}.csv`, '﻿' + lines.join('\r\n'));
 }
 
@@ -2425,10 +2469,13 @@ function pdfBase(kind, label, subline, landscape) {
 }
 async function reportPdf(R, r) {
   if (!window.jspdf?.jsPDF) return toast('O gerador de PDF não carregou. Recarregue o app com internet.');
-  const wide = r.head.length > 6;
+  const wide = !r.secoes && r.head.length > 6;
   const ctx = pdfBase('RELATÓRIO', R.t, R.all ? fmtDate(today()) : perTxt(), wide);
-  ctx.para(R.all ? `Posição em ${fmtDate(today())}` : `Período: ${per === 'tudo' ? 'todos os registros' : perTxt().toLowerCase()}`, 9, MUT);
-  ctx.table(r.head, r.rows.map(l => l.map(String)), r.right, r.foot?.map(String));
+  ctx.para(R.all ? `Posição em ${fmtDate(today())}` : `Período: ${per === 'tudo' ? 'todos os registros' : perTxt().toLowerCase()} (${periodoTxt()})`, 9, MUT);
+  if (r.secoes) {
+    ctx.kv(r.resumo);
+    for (const x of r.secoes) { ctx.heading(x.t); if (x.rows.length) ctx.table(x.head, x.rows.map(l => l.map(String)), x.right, x.foot?.map(String)); else ctx.para('Nada neste período.', 9, MUT); }
+  } else ctx.table(r.head, r.rows.map(l => l.map(String)), r.right, r.foot?.map(String));
   ctx.footer(`${D().cfg.nome || 'Longhi Manutenções'} · ${R.t} · gerado em ${new Date().toLocaleDateString('pt-BR')}`);
   await saveFile(`${slug(R.t)}-${R.all ? today() : slug(perTxt())}.pdf`, ctx.doc.output('blob'));
 }
