@@ -657,6 +657,8 @@ const MOTIVOS = ['Almoço / refeição', 'Aguardando peça', 'Chuva / clima', 'A
 // LGPD: no PDF o CPF sai mascarado (CNPJ é dado da empresa e sai completo)
 const maskDoc = d => { const x = String(d || '').replace(/\D/g, ''); return x.length === 11 ? `***.${x.slice(3, 6)}.${x.slice(6, 9)}-**` : (d || ''); };
 const ACORDO = total => `Declaro que concordo com os serviços descritos nesta ordem de serviço e com o valor total cobrado de ${brl(total)}.`;
+// assinatura feita pelo cliente no portal (coleção "assinaturas", escrita só pelo portal)
+const assinPortal = id => { const r = assinaturas[id]; return r?.img ? { id: r.img, nome: r.nome, em: n(r.em), total: r.total, portal: true } : null; };
 const CONSENT = 'Confirmo a execução do serviço e autorizo o uso dos meus dados para o registro deste atendimento (LGPD).';
 const cliLabel = c => c ? (c.fazenda ? `${c.nome} · ${c.fazenda}` : c.nome) : '';
 const osLabel = a => a.numero ? 'OS ' + String(a.numero).padStart(4, '0') : '';
@@ -677,7 +679,7 @@ const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 };
-const COLS = { clientes: 'c', maquinas: 'm', atendimentos: 'a', faturas: 'f', gastos: 'g', aportes: 'p', materiais: 'mt', estoque: 'e', lixeira: 'lx', respostas: 'r' };
+const COLS = { clientes: 'c', maquinas: 'm', atendimentos: 'a', faturas: 'f', gastos: 'g', aportes: 'p', materiais: 'mt', estoque: 'e', lixeira: 'lx', respostas: 'r', assinaturas: 'as' };
 let server = LS.get('cs-cache', null) || { clientes: {}, maquinas: {}, atendimentos: {}, config: null };
 if (!server.faturas) server.faturas = {};
 if (!server.gastos) server.gastos = {};
@@ -686,7 +688,8 @@ if (!server.materiais) server.materiais = {};
 if (!server.estoque) server.estoque = {};
 if (!server.lixeira) server.lixeira = {};
 if (!server.respostas) server.respostas = {};
-let faturas = {}, gastos = {}, aportes = {}, materiais = {}, estoque = {}, lixeira = {}, respostas = {};
+if (!server.assinaturas) server.assinaturas = {};
+let faturas = {}, gastos = {}, aportes = {}, materiais = {}, estoque = {}, lixeira = {}, respostas = {}, assinaturas = {};
 let outbox = LS.get('cs-outbox', []);
 let syncing = false, lastSyncOk = true;
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej({ code: 'timeout' }), ms))]);
@@ -701,9 +704,9 @@ function applyOp(state, op) {
   else m[id] = { ...op.data, id };
 }
 function recompute() {
-  const st = { clientes: { ...server.clientes }, maquinas: { ...server.maquinas }, atendimentos: { ...server.atendimentos }, faturas: { ...server.faturas }, gastos: { ...server.gastos }, aportes: { ...server.aportes }, materiais: { ...server.materiais }, estoque: { ...server.estoque }, lixeira: { ...server.lixeira }, respostas: { ...server.respostas }, config: server.config };
+  const st = { clientes: { ...server.clientes }, maquinas: { ...server.maquinas }, atendimentos: { ...server.atendimentos }, faturas: { ...server.faturas }, gastos: { ...server.gastos }, aportes: { ...server.aportes }, materiais: { ...server.materiais }, estoque: { ...server.estoque }, lixeira: { ...server.lixeira }, respostas: { ...server.respostas }, assinaturas: { ...server.assinaturas }, config: server.config };
   for (const op of outbox) applyOp(st, op);
-  clientes = st.clientes; maquinas = st.maquinas; atend = st.atendimentos; faturas = st.faturas; gastos = st.gastos; aportes = st.aportes; materiais = st.materiais; estoque = st.estoque; lixeira = st.lixeira; respostas = st.respostas;
+  clientes = st.clientes; maquinas = st.maquinas; atend = st.atendimentos; faturas = st.faturas; gastos = st.gastos; aportes = st.aportes; materiais = st.materiais; estoque = st.estoque; lixeira = st.lixeira; respostas = st.respostas; assinaturas = st.assinaturas;
   const nc = { valorHora: 0, valorKm: 0, nome: '', pagamento: '', ...(st.config || {}) };
   if (JSON.stringify(nc) !== JSON.stringify(cfg) || !recompute.done) { cfg = nc; renderCfg(); recompute.done = true; }
   rerender(); renderSync();
@@ -779,7 +782,8 @@ async function uploadImg(blob) {
 const objUrls = {};
 function imgOf(id, attrs = {}) {
   const img = el('img', { alt: '', ...attrs });
-  if (!String(id).startsWith('local-')) Nuvem.blobUrl(id).then(u => { if (u) img.src = u; }).catch(() => {});
+  if (String(id).startsWith('data:image/')) img.src = id;
+  else if (!String(id).startsWith('local-')) Nuvem.blobUrl(id).then(u => { if (u) img.src = u; }).catch(() => {});
   else if (objUrls[id]) img.src = objUrls[id];
   else idb.get(id).then(b => { if (b) img.src = objUrls[id] = URL.createObjectURL(b); }).catch(() => {});
   return img;
@@ -1383,11 +1387,12 @@ document.addEventListener('click', e => { const img = e.target.closest?.('.photo
 function renderSig() {
   svcAuto.kick();
   const box = $('#sigBox'); box.replaceChildren();
-  box.append(el('p', { class: 'acordo' }, ACORDO(calc(formSvc()).total)));
-  if (sig) {
-    box.append(imgOf(sig.id, { class: 'sigimg', alt: 'Assinatura de ' + sig.nome }),
-      el('div', { class: 'small muted' }, `Assinado por ${sig.nome || 'cliente'} em ${new Date(sig.em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`),
-      el('div', { class: 'row' }, el('button', { type: 'button', onclick: () => { sig = null; renderSig(); } }, 'Assinar de novo')));
+  const rp = !sig && assinPortal(editingSvc), x = sig || rp;
+  box.append(el('p', { class: 'acordo', ...(rp && rp.total != null && { 'data-fixo': '1' }) }, ACORDO(rp && rp.total != null ? rp.total : calc(formSvc()).total)));
+  if (x) {
+    box.append(imgOf(x.id, { class: 'sigimg', alt: 'Assinatura de ' + x.nome }),
+      el('div', { class: 'small muted' }, `Assinado ${rp ? 'pelo portal ' : ''}por ${x.nome || 'cliente'} em ${new Date(x.em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`),
+      ...(sig ? [el('div', { class: 'row' }, el('button', { type: 'button', onclick: () => { sig = null; renderSig(); } }, 'Assinar de novo'))] : []));
     return;
   }
   if (!assets) { box.append(el('div', { class: 'small muted' }, 'A assinatura fica disponível quando você abre o app logado na sua conta.')); return; }
@@ -1396,7 +1401,17 @@ function renderSig() {
     el('button', { type: 'button', class: 'primary sigopen', onclick: () => {
       if (!nome.value.trim()) { nome.focus(); return toast('Escreva o nome de quem vai assinar'); }
       openSigPad(nome.value.trim());
-    } }, 'Coletar assinatura'));
+    } }, 'Coletar assinatura'),
+    el('button', { type: 'button', class: 'sigopen', onclick: pedirAssinatura }, 'Pedir assinatura pelo portal'));
+}
+// cliente que não estava no local assina a OS finalizada pelo portal
+async function pedirAssinatura() {
+  if (!['concluido', 'faturado'].includes($('#sStatus').value)) return toast('Finalize a OS para o cliente assinar pelo portal');
+  await svcAuto.flush();
+  const a = atend[editingSvc]; if (!a) return;
+  const c = clientes[a.clienteId];
+  try { if (c) Nuvem.acessos(c.id).then(l => { if (Array.isArray(l) && !l.length) toast('Esse cliente ainda não tem login no portal. Crie em Clientes e máquinas.'); }).catch(() => {}); } catch {}
+  await shareTxt('Assinatura ' + osLabel(a), `Olá${c?.nome ? ', ' + c.nome : ''}.\n\nA ${osLabel(a)} foi finalizada, no valor de ${brl(calc(a).total)}. Confira o serviço e assine pelo portal: ${portalUrl(a.id)}`);
 }
 function openSigPad(nome) {
   const cv = el('canvas', { class: 'sigfull-pad', 'aria-label': 'Área para o cliente assinar com o dedo' });
@@ -1481,7 +1496,7 @@ function formSvc() {
 }
 function renderTotals() {
   const f = formSvc(), t = calc(f);
-  const ac = document.querySelector('#sigBox .acordo'); if (ac) ac.textContent = ACORDO(t.total);
+  const ac = document.querySelector('#sigBox .acordo'); if (ac && !ac.dataset.fixo) ac.textContent = ACORDO(t.total);
   $('#svcTotals').replaceChildren(
     el('div', {}, el('span', {}, `Mão de obra · ${dur(f.horas * 3600000)}`), el('span', {}, brl(t.mo))),
     el('div', {}, el('span', {}, `Deslocamento · ${f.km} km`), el('span', {}, brl(t.desl))),
@@ -1632,12 +1647,13 @@ async function enviarOrc(deNovo) {
 function avisarRespostas() {
   const visto = LS.get('cs-resp-visto', 0);
   if (!visto) return LS.set('cs-resp-visto', Date.now());
-  const novas = Object.values(respostas).filter(r => n(r.em) > visto).sort((x, y) => n(x.em) - n(y.em));
+  const novas = [...Object.values(respostas), ...Object.values(assinaturas).map(x => ({ id: x.id, em: x.em, assinou: true }))]
+    .filter(r => n(r.em) > visto).sort((x, y) => n(x.em) - n(y.em));
   if (!novas.length) return;
   LS.set('cs-resp-visto', n(novas[novas.length - 1].em));
   const r = novas[novas.length - 1], a = atend[r.id];
-  toast(`${r.aprovado ? 'Cliente aprovou o orçamento' : 'Cliente recusou o orçamento'}${a ? ' da ' + osLabel(a) : ''}`);
-  if (!$('#svcSheet').hidden && editingSvc === r.id && orc?.enviado) renderOrc();
+  toast(r.assinou ? `Cliente assinou ${a ? 'a ' + osLabel(a) : 'a OS'} pelo portal` : `${r.aprovado ? 'Cliente aprovou o orçamento' : 'Cliente recusou o orçamento'}${a ? ' da ' + osLabel(a) : ''}`);
+  if (!$('#svcSheet').hidden && editingSvc === r.id) { if (r.assinou) { if (!sig && osTab === 'fechar') renderSig(); } else if (orc?.enviado) renderOrc(); }
 }
 
 $('#btnAddPart').onclick = () => { parts.push({ desc: '', qtd: 1, valor: 0 }); renderParts(); renderTotals(); $(`#p_d_${parts.length - 1}`).focus(); };
@@ -1870,7 +1886,7 @@ $('#btnPortalCli').onclick = () => loginDlg(editingCli);
 /* ---------- PDF da OS ---------- */
 async function imgData(id, maxDim = 1200) {
   if (!id) return null;
-  const src = String(id).startsWith('local-') ? (objUrls[id] || (await idb.get(id).then(b => b && (objUrls[id] = URL.createObjectURL(b))).catch(() => null))) : await Nuvem.blobUrl(id).catch(() => null);
+  const src = String(id).startsWith('data:image/') ? id : String(id).startsWith('local-') ? (objUrls[id] || (await idb.get(id).then(b => b && (objUrls[id] = URL.createObjectURL(b))).catch(() => null))) : await Nuvem.blobUrl(id).catch(() => null);
   if (!src) return null;
   try {
     const im = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
@@ -2041,14 +2057,15 @@ async function buildPdf(a, orc = false) {
     para(`Garantia do serviço: ${garantiaDias()} dias, até ${fmtDate(ate)}.`, 9);
   }
 
-  if (a.assinatura) {
-    const s = await imgData(a.assinatura.id, 800);
+  const as = a.assinatura || assinPortal(a.id);
+  if (as) {
+    const s = await imgData(as.id, 800);
     space(64); heading('Assinatura do cliente');
-    para(ACORDO(t.total), 9);
+    para(ACORDO(as.portal && as.total != null ? as.total : t.total), 9);
     if (s) { const k = Math.min(70 / s.w, 28 / s.h); doc.addImage(s.data, 'JPEG', M, y, s.w * k, s.h * k); y += s.h * k + 2; }
     doc.setDrawColor(...INK); doc.setLineWidth(0.3); doc.line(M, y, M + 80, y); y += 4;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...MUT);
-    doc.text(`${a.assinatura.nome} · ${new Date(a.assinatura.em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`, M, y); y += 5;
+    doc.text(`${as.nome} · ${new Date(as.em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}${as.portal ? ' · assinado pelo portal' : ''}`, M, y); y += 5;
     doc.setFontSize(8); doc.text(doc.splitTextToSize(CONSENT, W - 2 * M), M, y); y += 6;
   }
   return rodape();
