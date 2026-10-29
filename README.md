@@ -7,6 +7,7 @@ App de ordens de serviço da Longhi Manutenções. Funciona no celular, tablet e
 - `conta.js`: tela de entrada, sair da conta e instalação
 - `sw.js`: guarda o app no aparelho para abrir sem internet
 - `config.js`: endereço e chave pública do projeto Supabase
+- `selic.json`: taxa Selic diária do Banco Central, usada para corrigir os aportes (Gestão › Aportes). Atualizada sozinha todo dia por `.github/workflows/selic.yml`
 - `supabase/configurar.sql`: cria a tabela e a pasta de fotos no Supabase (rodar uma vez)
 - `portal/`: leva para o portal do cliente, que fica em https://longhimanutencoes.github.io (repositório longhimanutencoes/longhimanutencoes.github.io)
 - `supabase/portal.sql`: libera essa página no Supabase (rodar uma vez)

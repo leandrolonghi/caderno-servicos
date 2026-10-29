@@ -1,0 +1,25 @@
+# Atualiza selic.json com a taxa Selic do Banco Central (usada na aba Aportes da Gestão)
+name: Taxa Selic
+on:
+  schedule:
+    - cron: '30 11 * * 1-6'
+    - cron: '30 21 * * 1-5'
+  workflow_dispatch:
+  push:
+    paths: ['.github/selic.py', '.github/workflows/selic.yml']
+permissions:
+  contents: write
+concurrency: selic
+jobs:
+  selic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: python3 .github/selic.py
+      - run: |
+          git diff --quiet -- selic.json 2>/dev/null && git ls-files --error-unmatch selic.json >/dev/null 2>&1 && exit 0
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add selic.json
+          git commit -m 'Atualiza taxa Selic'
+          git push
