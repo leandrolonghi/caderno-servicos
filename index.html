@@ -3153,7 +3153,7 @@ async function faturaPdf(id) {
   ctx.heading('Valores');
   const sum = k => (f.itens || []).reduce((s, x) => s + n(x[k]), 0);
   const rows = [['Mão de obra', fmtH(sum('horas')), brl(sum('mo'))], ['Deslocamento', fmtN(sum('km')) + ' km', brl(sum('desl'))], ['Materiais de consumo', '', brl(sum('pecas'))]];
-  if (n(f.desconto) > 0) rows.push(['Desconto', '', '− ' + brl(f.desconto)]);
+  if (n(f.desconto) > 0) rows.push(['Desconto', '', '- ' + brl(f.desconto)]);
   ctx.table(['Descrição', 'Quantidade', 'Valor'], rows, [1, 2], ['Total', '', brl(f.total)], { columnStyles: { 1: { cellWidth: 34, halign: 'right' }, 2: { cellWidth: 38, halign: 'right' } } });
   ctx.heading('Pagamento');
   ctx.kv([['Vencimento', fmtDate(f.vencimento)], ['Situação', f.status === 'paga' ? `Paga em ${fmtDate(f.pagoEm)}${f.forma ? ' · ' + f.forma : ''}` : FST[st]],

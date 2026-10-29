@@ -11,6 +11,7 @@
 -- O checklist de inspeção aparece com a situação, a observação, a foto de referência e as fotos de cada ponto.
 -- Quando você envia um orçamento pelo app, o cliente aprova ou recusa no portal; a resposta volta para o app.
 -- O cliente que não estava no local assina a OS finalizada pelo portal; a assinatura aparece no app e no PDF.
+-- O cliente baixa o PDF da OS e o da fatura pelo portal.
 -- As faturas em aberto mostram o QR code e o Pix copia e cola com o valor (chave em Gestão › Faturas › Dados de pagamento).
 -- As senhas ficam guardadas embaralhadas (bcrypt): nem você consegue ler depois.
 -- A senha que você cria é provisória: no primeiro acesso o cliente cria a senha dele.
@@ -213,11 +214,19 @@ begin
     'cnpj', g.data->'cnpj', 'email', g.data->'email', 'endereco', g.data->'endereco',
     'pix', case when coalesce(g.data#>>'{fiscal,pix}', '') <> '' then jsonb_build_object(
       'chave', g.data#>'{fiscal,pix}', 'tipo', g.data#>'{fiscal,pixTipo}', 'cidade', g.data#>'{fiscal,cidade}') end,
+    'banco', nullif(g.data#>>'{fiscal,banco}', ''), 'garantiaDias', g.data->'garantiaDias',
     'pasta', c.owner, 'trocarSenha', pa.trocar,
     'faturas', (select coalesce(jsonb_agg(jsonb_build_object(
         'id', f.id, 'numero', f.data->'numero', 'emissao', f.data->'emissao', 'vencimento', f.data->'vencimento',
         'status', f.data->'status', 'total', public.portal_num(f.data->'total'), 'pagoEm', f.data->'pagoEm', 'forma', f.data->'forma',
         'nf', case when f.data#>>'{nf,status}' = 'emitida' then f.data#>'{nf,numero}' end,
+        'nfData', case when f.data#>>'{nf,status}' = 'emitida' then f.data#>'{nf,data}' end,
+        'nfCodigo', case when f.data#>>'{nf,status}' = 'emitida' then f.data#>'{nf,codigo}' end,
+        'desconto', public.portal_num(f.data->'desconto'), 'obs', nullif(f.data->>'obs', ''),
+        'itens', (select coalesce(jsonb_agg(jsonb_build_object('osId', x->'osId', 'os', x->'os', 'data', x->'data', 'servico', x->'servico',
+                    'horas', public.portal_num(x->'horas'), 'km', public.portal_num(x->'km'), 'mo', public.portal_num(x->'mo'),
+                    'desl', public.portal_num(x->'desl'), 'pecas', public.portal_num(x->'pecas'), 'total', public.portal_num(x->'total'))), '[]')
+                  from jsonb_array_elements(jsonb_path_query_array(f.data, '$.itens[*]')) x),
         'osIds', jsonb_path_query_array(f.data, '$.osIds[*]')
       ) order by f.data->>'emissao' desc), '[]')
       from public.docs f

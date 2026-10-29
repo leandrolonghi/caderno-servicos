@@ -1,6 +1,6 @@
 /* Guarda o app no aparelho para abrir sem sinal.
    Abre sempre a cópia guardada e busca a versão nova em segundo plano (vale na próxima abertura). */
-const V = 'caderno-1793284650';
+const V = 'caderno-1793284895';
 const SHELL = ['./', 'index.html', 'config.js', 'nuvem.js', 'conta.js', 'manifest.webmanifest',
   'vendor/supabase.js', 'vendor/591.supabase.js', 'vendor/jspdf.umd.min.js', 'vendor/jspdf.plugin.autotable.min.js', 'vendor/qrcode.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-180.png', 'icons/favicon-64.png', 'selic.json'];
