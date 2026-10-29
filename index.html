@@ -1542,6 +1542,7 @@ function renderOrc() {
       env.obs && el('p', { class: 'small muted', style: 'margin:0;white-space:pre-wrap' }, env.obs),
       el('div', { class: 'small muted' }, 'Enviado em ' + dataHora(env.em)),
       el('div', { class: 'row' },
+        el('button', { type: 'button', class: 'primary', onclick: () => atend[editingSvc] && orcPdf(atend[editingSvc]) }, 'Baixar PDF'),
         !r && el('button', { type: 'button', onclick: () => enviarOrc(true) }, 'Enviar de novo'),
         el('button', { type: 'button', onclick: () => {
           if (r?.aprovado && !confirm('O cliente já aprovou este orçamento. Se alterar, ele precisa aprovar de novo. Alterar?')) return;
@@ -1576,6 +1577,12 @@ function renderOrc() {
       el('button', { type: 'button', class: 'ghost', onclick: () => { if (!orcLinhas(orc).length || confirm('Apagar este orçamento?')) { orc = null; renderOrc(); svcAuto.kick(); } } }, 'Apagar orçamento')));
   somar();
 }
+async function orcPdf(a) {
+  if (!window.jspdf?.jsPDF) { toast('O gerador de PDF não carregou. Recarregue o app com internet.'); return false; }
+  const cli = (clientes[a.clienteId]?.nome || 'cliente').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
+  try { await saveFile(`Orcamento-${osLabel(a).replace(' ', '-')}-${cli}.pdf`, (await buildPdf(a, true)).output('blob')); return true; }
+  catch (err) { toast('Não foi possível gerar o PDF: ' + (err.message || err)); return false; }
+}
 async function enviarOrc(deNovo) {
   if (!deNovo) {
     const linhas = orcLinhas(orc);
@@ -1586,6 +1593,7 @@ async function enviarOrc(deNovo) {
   const a = await saveSvc(false, true);
   if (!a) { if (!deNovo) delete orc.enviado; return toast('Escolha o cliente antes de enviar'); }
   renderOrc(); $('#svcSaved').textContent = '✓ Salvo';
+  if (!deNovo) await orcPdf(a);
   const c = clientes[a.clienteId], m = maquinas[a.maquinaId], mq = m ? `${m.tipo || ''} ${m.marca || ''} ${m.modelo || ''}`.replace(/\s+/g, ' ').trim() : '';
   try { if (c) Nuvem.acessos(c.id).then(l => { if (Array.isArray(l) && !l.length) toast('Esse cliente ainda não tem login no portal. Crie em Clientes e máquinas.'); }).catch(() => {}); } catch {}
   await shareTxt('Orçamento ' + osLabel(a), `Olá${c?.nome ? ', ' + c.nome : ''}.\n\nO orçamento da ${osLabel(a)}${mq ? ' (' + mq + ')' : ''} ficou em ${brl(a.orcamento.enviado.total)}.\nVeja os detalhes e aprove pelo portal: ${portalUrl(a.id)}`);
@@ -1838,7 +1846,8 @@ async function imgData(id, maxDim = 1200) {
     return { data: c.toDataURL('image/jpeg', 0.85), w: c.width, h: c.height };
   } catch { return null; }
 }
-async function buildPdf(a) {
+// orc = true: PDF do orçamento enviado (mesmo cabeçalho, cliente e máquina; depois falha, causa e os itens do orçamento)
+async function buildPdf(a, orc = false) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const W = 210, M = 14, CW = W - 2 * M, BOTTOM = 297 - 16;
@@ -1904,16 +1913,40 @@ async function buildPdf(a) {
   doc.text(cfg.nome || 'Longhi Manutenções', ex, emp.length ? 11 : 16);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(220, 220, 220);
   emp.slice(0, 3).forEach((l, i) => doc.text(doc.splitTextToSize(l, 88)[0], ex, 16.5 + i * 4.4));
-  doc.setFontSize(7.5); doc.setTextColor(254, 192, 4); doc.text('ORDEM DE SERVIÇO', W - M, 8, { align: 'right' });
+  const env = orc && a.orcamento?.enviado;
+  doc.setFontSize(7.5); doc.setTextColor(254, 192, 4); doc.text(orc ? 'ORÇAMENTO' : 'ORDEM DE SERVIÇO', W - M, 8, { align: 'right' });
   doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(254, 192, 4); doc.text(osLabel(a) || 'OS', W - M, 14, { align: 'right' });
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(255, 255, 255);
-  doc.text(`${fmtDate(a.data)} · ${STATUS[a.status] || ''}`, W - M, 20, { align: 'right' });
+  doc.text(orc ? new Date(env.em).toLocaleDateString('pt-BR') : `${fmtDate(a.data)} · ${STATUS[a.status] || ''}`, W - M, 20, { align: 'right' });
   y = 38; doc.setTextColor(...INK);
 
   heading('Cliente');
   kv([['Cliente', c.nome], ['Fazenda', c.fazenda], ['CPF / CNPJ', maskDoc(c.documento)], ['Localização', c.local]]);
   heading('Máquina e serviço');
   kv([['Máquina', m ? `${m.tipo} ${m.marca} ${m.modelo}`.trim() : ''], ['Nº de série / chassi', m?.serie], ['Ano', m?.ano], ['Horímetro', a.horimetro ? `${a.horimetro} h` : ''], ['Tipo de serviço', tipoTxt(a.tipo)], ['Data', fmtDate(a.data)]]);
+  const rodape = () => {
+    const pages = doc.getNumberOfPages();
+    for (let i = 1; i <= pages; i++) {
+      doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...MUT);
+      doc.text(`${cfg.nome || ''} ${orc ? 'Orçamento ' : ''}${osLabel(a)} · ${c.nome || ''}`.trim(), M, 297 - 8);
+      doc.text(`Página ${i} de ${pages}`, W - M, 297 - 8, { align: 'right' });
+    }
+    return doc;
+  };
+  if (orc) {
+    if (a.problema) { heading(a.categoria ? `Falha · ${a.categoria}` : 'Falha'); para(a.problema); }
+    if (a.causa) { heading('Causa'); para(a.causa); }
+    heading('Orçamento');
+    table(['Descrição', 'Qtd', 'Valor un.', 'Subtotal'], env.linhas.map(x => [x.desc, fmtQ(x.qtd) + (x.un ? ' ' + x.un : ''), brl(x.valor), brl(n(x.qtd) * n(x.valor))]),
+      { right: [1, 2, 3], columnStyles: { 1: { cellWidth: 22 }, 2: { cellWidth: 30 }, 3: { cellWidth: 30 } }, foot: [['Total', '', '', brl(env.total)]], showFoot: 'lastPage',
+        didParseCell: d => { if (d.section === 'foot' && d.column.index === 3) d.cell.styles.textColor = YEL; } });
+    if (env.obs) { heading('Observações'); para(env.obs); }
+    const r = respostaDe(a.id, a.orcamento);
+    space(12); y += 2;
+    para(r ? `${r.aprovado ? 'Aprovado' : 'Recusado'}${r.por ? ' por ' + r.por : ''} em ${new Date(r.em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}.${r.motivo ? ' Motivo: ' + r.motivo : ''}`
+      : `Para aprovar ou recusar, acesse o portal: ${portalUrl(a.id)}`, 9);
+    return rodape();
+  }
   if (a.fotoHorimetro || a.fotoChassi) await photos([a.fotoHorimetro, a.fotoChassi].filter(Boolean), [a.fotoHorimetro && 'Horímetro', a.fotoChassi && 'Chassi / plaqueta'].filter(Boolean));
 
   if (a.problema || (a.fotosProblema || []).length) { heading(a.categoria ? `Falha · ${a.categoria}` : 'Falha'); if (a.problema) para(a.problema); await photos(a.fotosProblema || []); }
@@ -1980,13 +2013,7 @@ async function buildPdf(a) {
     doc.text(`${a.assinatura.nome} · ${new Date(a.assinatura.em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`, M, y); y += 5;
     doc.setFontSize(8); doc.text(doc.splitTextToSize(CONSENT, W - 2 * M), M, y); y += 6;
   }
-  const pages = doc.getNumberOfPages();
-  for (let i = 1; i <= pages; i++) {
-    doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...MUT);
-    doc.text(`${cfg.nome || ''} ${osLabel(a)} · ${c.nome || ''}`.trim(), M, 297 - 8);
-    doc.text(`Página ${i} de ${pages}`, W - M, 297 - 8, { align: 'right' });
-  }
-  return doc;
+  return rodape();
 }
 async function osPdf() {
   await svcAuto.flush();
