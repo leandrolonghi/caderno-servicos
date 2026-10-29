@@ -87,6 +87,17 @@ legend{font-family:var(--display);font-size:16px;text-transform:uppercase;letter
 .parts{display:flex;flex-direction:column;gap:8px}
 .part{display:grid;grid-template-columns:1fr 64px 96px 44px;gap:6px;align-items:end}
 .part button{padding:0;min-width:44px}
+.part .pinfo{grid-column:1/-1;margin-top:-2px}
+.pinfo.low,.matlow{color:var(--warn)}
+.pinfo.neg{color:var(--bad)}
+.estbanner{display:block;width:100%;text-align:left;border:1px solid var(--warn);background:var(--surface);font:inherit;font-size:14px;min-height:0;cursor:pointer}
+.estq{font-size:28px;font-weight:600;font-variant-numeric:tabular-nums}
+.mov{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.mov > span:first-child{display:flex;flex-direction:column;min-width:0}
+.mov .q{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mov button{min-height:36px;min-width:36px;padding:0}
+.chkline{display:flex;align-items:center;gap:10px;font-weight:500}
+.chkline input{width:22px;height:22px;min-height:0;margin:0;accent-color:var(--accent)}
 .idphotos{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .idslot{display:flex;flex-direction:column;gap:6px;min-width:0}
 .idslot .lbl{font-size:14px;font-weight:600;color:var(--muted)}
@@ -367,6 +378,7 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
   <!-- Atendimentos -->
   <section id="v-atend" class="view"><div class="wrap">
     <div id="dbBanner" class="banner" hidden></div>
+    <button type="button" id="estBanner" class="banner estbanner" hidden></button>
     <div class="spread"><h2>Ordens de serviço</h2><span class="small muted" id="atendCount"></span></div>
     <input id="atendBusca" type="search" placeholder="Buscar" aria-label="Buscar OS por falha, máquina, cliente ou solução" autocomplete="off">
     <div class="list" id="atendList"><div class="empty">Carregando seus atendimentos…</div></div>
@@ -388,7 +400,7 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
     <div id="ajMenu">
       <button type="button" class="ghost ajback" id="ajHome">‹ Início</button>
       <h2>Ajustes</h2>
-      <div class="ajlist"><button type="button" class="ajitem" data-aj="clientes"><span><b>Clientes e máquinas</b><span class="small muted" id="ajSum-clientes"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="tipos"><span><b>Tipos de serviço</b><span class="small muted" id="ajSum-tipos"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="categorias"><span><b>Categorias de falha</b><span class="small muted" id="ajSum-categorias"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="empresa"><span><b>Empresa</b><span class="small muted" id="ajSum-empresa"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="valores"><span><b>Valores</b><span class="small muted" id="ajSum-valores"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="motivos"><span><b>Motivos de pausa</b><span class="small muted" id="ajSum-motivos"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="checklist"><span><b>Checklist</b><span class="small muted" id="ajSum-checklist"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="conta"><span><b>Conta</b><span class="small muted" id="ajSum-conta"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="backup"><span><b>Cópia dos dados</b><span class="small muted" id="ajSum-backup"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button></div>
+      <div class="ajlist"><button type="button" class="ajitem" data-aj="clientes"><span><b>Clientes e máquinas</b><span class="small muted" id="ajSum-clientes"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="materiais"><span><b>Materiais e estoque</b><span class="small muted" id="ajSum-materiais"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="tipos"><span><b>Tipos de serviço</b><span class="small muted" id="ajSum-tipos"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="categorias"><span><b>Categorias de falha</b><span class="small muted" id="ajSum-categorias"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="empresa"><span><b>Empresa</b><span class="small muted" id="ajSum-empresa"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="valores"><span><b>Valores</b><span class="small muted" id="ajSum-valores"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="motivos"><span><b>Motivos de pausa</b><span class="small muted" id="ajSum-motivos"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="checklist"><span><b>Checklist</b><span class="small muted" id="ajSum-checklist"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="conta"><span><b>Conta</b><span class="small muted" id="ajSum-conta"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="backup"><span><b>Cópia dos dados</b><span class="small muted" id="ajSum-backup"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button></div>
     </div>
     <div class="ajpanel" data-aj="empresa" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Empresa</h2>
       <label class="f" for="cfgNome">Nome da empresa<input id="cfgNome"></label>
@@ -404,6 +416,9 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
       <label class="f" for="cfgHora">Valor da hora técnica (R$)<input id="cfgHora" type="number" inputmode="decimal" step="0.01" min="0"></label>
       <label class="f" for="cfgKm">Valor por km rodado (R$)<input id="cfgKm" type="number" inputmode="decimal" step="0.01" min="0"></label>
       <span class="savestate small cfgSaved"></span>
+    </div>
+    <div class="ajpanel" data-aj="materiais" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Materiais e estoque</h2>
+      <div id="matBox" style="display:flex;flex-direction:column;gap:12px"></div>
     </div>
     <div class="ajpanel" data-aj="tipos" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Tipos de serviço</h2>
       <div class="list" id="tiposList"></div>
@@ -480,7 +495,7 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
         <div class="row"><button type="button" id="btnAddTest">+ Teste</button></div>
       </fieldset>
       <fieldset data-tab="servico" data-sub="solucao"><legend>Materiais de consumo</legend>
-        <div class="parts" id="partsBox"></div>
+        <div class="parts" id="partsBox"></div><datalist id="matList"></datalist>
         <div class="row"><button type="button" id="btnAddPart">+ Material</button></div>
       </fieldset>
       <fieldset data-tab="servico" data-sub="solucao"><legend>Fotos do serviço</legend>
@@ -643,12 +658,14 @@ const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 };
-const COLS = { clientes: 'c', maquinas: 'm', atendimentos: 'a', faturas: 'f', gastos: 'g', aportes: 'p' };
+const COLS = { clientes: 'c', maquinas: 'm', atendimentos: 'a', faturas: 'f', gastos: 'g', aportes: 'p', materiais: 'mt', estoque: 'e' };
 let server = LS.get('cs-cache', null) || { clientes: {}, maquinas: {}, atendimentos: {}, config: null };
 if (!server.faturas) server.faturas = {};
 if (!server.gastos) server.gastos = {};
 if (!server.aportes) server.aportes = {};
-let faturas = {}, gastos = {}, aportes = {};
+if (!server.materiais) server.materiais = {};
+if (!server.estoque) server.estoque = {};
+let faturas = {}, gastos = {}, aportes = {}, materiais = {}, estoque = {};
 let outbox = LS.get('cs-outbox', []);
 let syncing = false, lastSyncOk = true;
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej({ code: 'timeout' }), ms))]);
@@ -663,9 +680,9 @@ function applyOp(state, op) {
   else m[id] = { ...op.data, id };
 }
 function recompute() {
-  const st = { clientes: { ...server.clientes }, maquinas: { ...server.maquinas }, atendimentos: { ...server.atendimentos }, faturas: { ...server.faturas }, gastos: { ...server.gastos }, aportes: { ...server.aportes }, config: server.config };
+  const st = { clientes: { ...server.clientes }, maquinas: { ...server.maquinas }, atendimentos: { ...server.atendimentos }, faturas: { ...server.faturas }, gastos: { ...server.gastos }, aportes: { ...server.aportes }, materiais: { ...server.materiais }, estoque: { ...server.estoque }, config: server.config };
   for (const op of outbox) applyOp(st, op);
-  clientes = st.clientes; maquinas = st.maquinas; atend = st.atendimentos; faturas = st.faturas; gastos = st.gastos; aportes = st.aportes;
+  clientes = st.clientes; maquinas = st.maquinas; atend = st.atendimentos; faturas = st.faturas; gastos = st.gastos; aportes = st.aportes; materiais = st.materiais; estoque = st.estoque;
   const nc = { valorHora: 0, valorKm: 0, nome: '', pagamento: '', ...(st.config || {}) };
   if (JSON.stringify(nc) !== JSON.stringify(cfg) || !recompute.done) { cfg = nc; renderCfg(); recompute.done = true; }
   rerender(); renderSync();
@@ -1396,11 +1413,38 @@ function renderTotals() {
 function renderParts() {
   svcAuto.kick();
   const box = $('#partsBox'); box.replaceChildren();
-  parts.forEach((p, i) => box.append(el('div', { class: 'part' },
-    el('label', { class: 'f', for: `p_d_${i}` }, 'Descrição', el('input', { id: `p_d_${i}`, value: p.desc || '', oninput: e => p.desc = e.target.value })),
-    el('label', { class: 'f', for: `p_q_${i}` }, 'Qtd', el('input', { id: `p_q_${i}`, type: 'number', inputmode: 'decimal', step: 'any', min: '0', value: p.qtd ?? 1, oninput: e => { p.qtd = n(e.target.value); renderTotals(); } })),
-    el('label', { class: 'f', for: `p_v_${i}` }, 'Valor un.', el('input', { id: `p_v_${i}`, type: 'number', inputmode: 'decimal', step: '0.01', min: '0', value: p.valor ?? '', oninput: e => { p.valor = n(e.target.value); renderTotals(); } })),
-    el('button', { type: 'button', class: 'danger', 'aria-label': 'Remover material', onclick: () => { parts.splice(i, 1); renderParts(); renderTotals(); } }, '×'))));
+  $('#matList').replaceChildren(...Object.values(materiais).sort((x, y) => x.nome.localeCompare(y.nome)).map(m => el('option', { value: m.nome })));
+  // estoque sem contar esta OS; cada linha mostra quanto sobra depois dela
+  const base = saldos(editingSvc), controla = new Set(Object.values(estoque).map(x => x.materialId)), infos = [];
+  const refresh = () => infos.forEach(f => f());
+  parts.forEach((p, i) => {
+    const valor = el('input', { id: `p_v_${i}`, type: 'number', inputmode: 'decimal', step: '0.01', min: '0', value: p.valor ?? '', oninput: e => { p.valor = n(e.target.value); renderTotals(); } });
+    const info = el('div', { class: 'small muted pinfo' });
+    infos.push(() => {
+      const m = materiais[p.materialId];
+      info.hidden = !m || !controla.has(m.id);
+      if (info.hidden) return;
+      const q = (base[m.id] || 0) - parts.filter(x => x.materialId === m.id).reduce((s, x) => s + n(x.qtd), 0);
+      info.className = 'small pinfo ' + (q < 0 ? 'neg' : n(m.minimo) > 0 && q <= n(m.minimo) || q === 0 ? 'low' : 'muted');
+      info.textContent = q < 0 ? `Falta no estoque: ${matQ(-q, m)}` : `Fica no estoque: ${matQ(q, m)}`;
+    });
+    box.append(el('div', { class: 'part' },
+      el('label', { class: 'f', for: `p_d_${i}` }, 'Descrição', el('input', { id: `p_d_${i}`, list: 'matList', autocomplete: 'off', value: p.desc || '', oninput: e => { p.desc = e.target.value; ligarMat(p, valor); refresh(); renderTotals(); } })),
+      el('label', { class: 'f', for: `p_q_${i}` }, 'Qtd', el('input', { id: `p_q_${i}`, type: 'number', inputmode: 'decimal', step: 'any', min: '0', value: p.qtd ?? 1, oninput: e => { p.qtd = n(e.target.value); refresh(); renderTotals(); } })),
+      el('label', { class: 'f', for: `p_v_${i}` }, 'Valor un.', valor),
+      el('button', { type: 'button', class: 'danger', 'aria-label': 'Remover material', onclick: () => { parts.splice(i, 1); renderParts(); renderTotals(); } }, '×'),
+      info));
+  });
+  refresh();
+}
+// material escolhido da lista: liga ao estoque, guarda o custo do dia e sugere o preço de venda
+function ligarMat(p, valor) {
+  const m = matPorNome(p.desc);
+  if (!m) { delete p.materialId; delete p.custo; return; }
+  p.desc = m.nome;
+  if (p.materialId === m.id) return;
+  p.materialId = m.id; p.custo = n(m.custo);
+  if (!n(p.valor) && n(m.preco)) { p.valor = n(m.preco); valor.value = p.valor; }
 }
 $('#btnAddPart').onclick = () => { parts.push({ desc: '', qtd: 1, valor: 0 }); renderParts(); renderTotals(); $(`#p_d_${parts.length - 1}`).focus(); };
 
@@ -1498,7 +1542,7 @@ async function saveSvc(close, silent) {
     categoria: $('#sCat').value, problema: $('#sProblema').value.trim(), causa: $('#sCausa').value.trim(), fotosProblema: fotosProb,
     testes: testes.filter(x => x.desc.trim() || x.fotos.length).map(x => ({ desc: x.desc.trim(), fotos: x.fotos })),
     descricao: $('#sDesc').value.trim(), recomendacao: $('#sObsCli').value.trim(),
-    pecas: parts.filter(p => (p.desc || '').trim() || n(p.valor)).map(p => ({ desc: (p.desc || '').trim(), qtd: n(p.qtd), valor: n(p.valor) })),
+    pecas: parts.filter(p => (p.desc || '').trim() || n(p.valor)).map(p => ({ desc: (p.desc || '').trim(), qtd: n(p.qtd), valor: n(p.valor), ...(p.materialId && { materialId: p.materialId, custo: n(p.custo) }) })),
     fotos: photos, fotoHorimetro: idFotos.fotoHorimetro, fotoChassi: idFotos.fotoChassi, apontamentos: apont, checklist: chk.map(x => ({ grupo: x.grupo || '', item: x.item, ref: chkRef(x), estado: x.estado || '', obs: (x.obs || '').trim(), fotos: x.fotos || [] })), assinatura: sig, atualizadoEm: Date.now() };
   if (!prev.criadoEm) data.criadoEm = Date.now();
   if (!prev.numero) data.numero = Math.max(0, ...Object.values(atend).map(a => a.numero || 0)) + 1;
@@ -1866,7 +1910,7 @@ $('#btnCsv').onclick = () => {
   });
   saveFile(`atendimentos-${today()}.csv`, '﻿' + [head.join(';'), ...rows].join('\r\n'));
 };
-const copiaCompleta = () => JSON.stringify({ exportadoEm: new Date().toISOString(), config: cfg, clientes, maquinas, atendimentos: atend, faturas, gastos, aportes }, null, 2);
+const copiaCompleta = () => JSON.stringify({ exportadoEm: new Date().toISOString(), config: cfg, clientes, maquinas, atendimentos: atend, faturas, gastos, aportes, materiais, estoque }, null, 2);
 $('#btnJson').onclick = () => saveFile(`caderno-servicos-${today()}.json`, copiaCompleta());
 /* Cópia automática: uma vez por semana o app baixa a cópia completa no aparelho em uso.
    Roda no primeiro toque (o navegador só deixa baixar depois de um toque) e a data fica
@@ -2017,6 +2061,7 @@ $('#cfgForm').addEventListener('submit', e => { e.preventDefault(); cfgAuto.flus
 document.querySelectorAll('#cfgForm input[id^="cfg"]').forEach(i => i.addEventListener('input', () => cfgAuto.kick()));
 function showAj(k) {
   if (k === 'checklist') { grupoCfg = subCfg = null; renderChkCfg(); }
+  if (k === 'materiais') { matCfg = null; renderMatCfg(true); }
   $('#ajMenu').hidden = !!k;
   document.querySelectorAll('.ajpanel').forEach(p => p.hidden = p.dataset.aj !== k);
   window.scrollTo(0, 0);
@@ -2027,10 +2072,156 @@ $('#ajHome').onclick = () => show('v-atend');
 $('#cliBack').onclick = () => show('v-ajustes');
 document.querySelectorAll('.ajback').forEach(b => b.addEventListener('click', async () => { await cfgAuto.flush(); showAj(''); }));
 
+/* ---------- Materiais e estoque ----------
+   Estoque de cada material = entradas e correções lançadas aqui − o que foi usado nas OS.
+   A baixa é automática: basta escolher o material da lista na OS. */
+const UNIDADES = ['un', 'L', 'm', 'kg', 'cx', 'par', 'jogo'];
+const fmtQ = v => (Number(v) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
+const matQ = (q, m) => `${fmtQ(q)} ${m?.unidade || 'un'}`;
+const matPorNome = t => { const k = semAcento(t).trim(); return k ? Object.values(materiais).find(m => semAcento(m.nome).trim() === k) : null; };
+function saldos(semOs) {
+  const s = {};
+  for (const x of Object.values(estoque)) s[x.materialId] = (s[x.materialId] || 0) + n(x.qtd);
+  for (const a of Object.values(atend)) if (a.id !== semOs) for (const p of a.pecas || []) if (p.materialId) s[p.materialId] = (s[p.materialId] || 0) - n(p.qtd);
+  return s;
+}
+// acabando: chegou no mínimo, ou zerou um material que tem estoque lançado
+function acabando(s = saldos()) {
+  const controla = new Set(Object.values(estoque).map(x => x.materialId));
+  return Object.values(materiais).filter(m => controla.has(m.id) && (s[m.id] || 0) <= Math.max(0, n(m.minimo))).sort((x, y) => x.nome.localeCompare(y.nome));
+}
+function renderEstBanner() {
+  const s = saldos(), l = acabando(s), b = $('#estBanner');
+  b.hidden = !l.length;
+  b.replaceChildren(el('b', {}, 'Estoque baixo: '), l.map(m => `${m.nome} (${matQ(s[m.id] || 0, m)})`).join(', '));
+}
+$('#estBanner').onclick = () => { show('v-ajustes'); showAj('materiais'); };
+const catMateriais = () => { const l = Array.isArray(cfg.categoriasGasto) ? cfg.categoriasGasto.map(c => c.nome) : []; return l.find(x => /materia/.test(semAcento(x))) || 'Materiais e peças'; };
+function dialogo(titulo, campos, ok, rotulo) {
+  const close = () => ov.remove();
+  const ov = el('div', { class: 'qdlg', role: 'dialog', 'aria-label': titulo, onclick: e => { if (e.target === ov) close(); } },
+    el('div', { class: 'qdlg-box' }, el('h3', {}, titulo), campos,
+      el('div', { class: 'row', style: 'justify-content:flex-end' },
+        el('button', { type: 'button', class: 'ghost', onclick: close }, 'Cancelar'),
+        el('button', { type: 'button', class: 'primary', onclick: () => { if (ok() !== false) close(); } }, rotulo))));
+  document.body.append(ov);
+  requestAnimationFrame(() => ov.querySelector('input')?.focus());
+}
+function entradaMat(m) {
+  const un = m.unidade || 'un';
+  const q = el('input', { id: 'eQtd', type: 'number', inputmode: 'decimal', step: 'any', min: '0' });
+  const c = el('input', { id: 'eCusto', type: 'number', inputmode: 'decimal', step: '0.01', min: '0', value: n(m.custo) || '' });
+  const d = el('input', { id: 'eData', type: 'date', value: today() });
+  const g = el('input', { id: 'eGasto', type: 'checkbox', checked: true });
+  dialogo('Entrada · ' + m.nome, [
+    el('div', { class: 'grid2' }, el('label', { class: 'f', for: 'eQtd' }, `Quantidade (${un})`, q), el('label', { class: 'f', for: 'eCusto' }, `Custo por ${un} (R$)`, c)),
+    el('label', { class: 'f', for: 'eData' }, 'Data', d),
+    el('label', { class: 'chkline', for: 'eGasto' }, g, 'Lançar em Gastos')], () => {
+    const qtd = n(q.value), cu = n(c.value), data = d.value || today(), agora = Date.now();
+    if (!(qtd > 0)) { toast('Informe a quantidade'); return false; }
+    const gid = g.checked && qtd * cu > 0 ? newId() : null, id = newId();
+    if (gid) store.doc('gastos/' + gid).set({ id: gid, data, categoria: catMateriais(), descricao: `${m.nome} · ${matQ(qtd, m)}`, valor: Math.round(qtd * cu * 100) / 100, foto: null, carro: false, criadoEm: agora, atualizadoEm: agora });
+    store.doc('estoque/' + id).set({ id, materialId: m.id, tipo: 'entrada', data, qtd, custo: cu, gastoId: gid, criadoEm: agora });
+    if (cu > 0 && cu !== n(materiais[m.id]?.custo)) store.doc('materiais/' + m.id).set({ ...materiais[m.id], custo: cu, atualizadoEm: agora });
+    toast(gid ? 'Entrada lançada e gasto registrado' : 'Entrada lançada');
+  }, 'Salvar');
+}
+function corrigirMat(m) {
+  const q = el('input', { id: 'cQtd', type: 'number', inputmode: 'decimal', step: 'any', min: '0' });
+  dialogo('Corrigir estoque · ' + m.nome, [el('label', { class: 'f', for: 'cQtd' }, `Quantidade que tem agora (${m.unidade || 'un'})`, q)], () => {
+    if (q.value === '') { toast('Informe a quantidade'); return false; }
+    const dif = Math.round((n(q.value) - (saldos()[m.id] || 0)) * 1000) / 1000;
+    if (!dif) return toast('O estoque já está com essa quantidade');
+    const id = newId();
+    store.doc('estoque/' + id).set({ id, materialId: m.id, tipo: 'correcao', data: today(), qtd: dif, criadoEm: Date.now() });
+    toast('Estoque corrigido');
+  }, 'Salvar');
+}
+let matCfg = null, matUI = null;
+function renderMatCfg(force) {
+  const box = $('#matBox'); if (!box) return;
+  const s = saldos(), ms = Object.values(materiais).sort((x, y) => x.nome.localeCompare(y.nome)), low = new Set(acabando(s).map(m => m.id));
+  const controla = new Set(Object.values(estoque).map(x => x.materialId));
+  const sum = $('#ajSum-materiais'); if (sum) sum.textContent = ms.length ? `${ms.length} ${ms.length === 1 ? 'material' : 'materiais'}${low.size ? ` · ${low.size} acabando` : ''}` : 'Peças e insumos com estoque';
+  const m = materiais[matCfg];
+  if (!m) {
+    if (matUI === 'lista' && !force && box.contains(document.activeElement)) return;
+    matCfg = null; matUI = 'lista';
+    const novo = el('input', { id: 'matNovo', placeholder: 'Novo material, ex.: Óleo 15W40', style: 'flex:1;min-width:180px' });
+    const add = () => {
+      const v = novo.value.trim(); if (!v) return toast('Escreva o nome'); if (matPorNome(v)) return toast('Esse material já existe');
+      const id = newId(); matCfg = id;
+      store.doc('materiais/' + id).set({ id, nome: v, unidade: 'un', custo: 0, preco: 0, minimo: 0, criadoEm: Date.now(), atualizadoEm: Date.now() });
+      window.scrollTo(0, 0);
+    };
+    novo.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+    const chev = () => (t => (t.innerHTML = '<svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg>', t.content.firstChild))(document.createElement('template'));
+    box.replaceChildren(
+      ms.length ? el('div', { class: 'ajlist' }, ms.map(x => el('button', { type: 'button', class: 'ajitem', onclick: () => { matCfg = x.id; renderMatCfg(true); window.scrollTo(0, 0); } },
+        el('span', {}, el('b', {}, x.nome), el('span', { class: 'small ' + (low.has(x.id) ? 'matlow' : 'muted') },
+          [controla.has(x.id) ? `${matQ(s[x.id] || 0, x)} em estoque` : 'Sem estoque lançado', n(x.preco) ? 'venda ' + brl(x.preco) : ''].filter(Boolean).join(' · '))), chev())))
+        : el('div', { class: 'small muted' }, 'Nenhum material cadastrado.'),
+      el('div', { class: 'row' }, novo, el('button', { type: 'button', onclick: add }, '+ Material')));
+    return;
+  }
+  if (!force && matUI?.id === m.id) return matUI.upd();
+  const salvar = patch => store.doc('materiais/' + m.id).set({ ...materiais[m.id], ...patch, atualizadoEm: Date.now() });
+  const nome = el('input', { id: 'matNome', value: m.nome, onchange: e => {
+    const v = e.target.value.trim(), o = matPorNome(v);
+    if (!v || (o && o.id !== m.id)) { e.target.value = materiais[m.id].nome; return toast(v ? 'Esse material já existe' : 'Escreva o nome'); }
+    salvar({ nome: v });
+  } });
+  const un = el('select', { id: 'matUn', onchange: e => salvar({ unidade: e.target.value }) }, UNIDADES.map(u => el('option', { value: u }, u)));
+  const num = (id, key) => el('input', { id, type: 'number', inputmode: 'decimal', step: 'any', min: '0', value: n(m[key]) || '', onchange: e => salvar({ [key]: n(e.target.value) }) });
+  const custo = num('matCusto', 'custo'), preco = num('matPreco', 'preco'), minimo = num('matMin', 'minimo');
+  const margem = el('div', { class: 'small muted' }), qtd = el('div', { class: 'estq' }), movs = el('div', {});
+  const upd = () => {
+    const x = materiais[m.id]; if (!x) return renderMatCfg(true);
+    const put = (inp, v) => { if (document.activeElement !== inp) inp.value = v; };
+    put(nome, x.nome); put(un, x.unidade || 'un'); put(custo, n(x.custo) || ''); put(preco, n(x.preco) || ''); put(minimo, n(x.minimo) || '');
+    const u = x.unidade || 'un', luc = n(x.preco) - n(x.custo);
+    margem.textContent = n(x.custo) && n(x.preco) ? `${luc >= 0 ? 'Lucro' : 'Prejuízo'} de ${brl(Math.abs(luc))} por ${u} · ${Math.round(luc / n(x.custo) * 100)}% sobre o custo` : '';
+    const sx = saldos()[x.id] || 0;
+    qtd.textContent = matQ(sx, x); qtd.className = 'estq' + (acabando().some(y => y.id === x.id) ? ' matlow' : '');
+    const ev = [
+      ...Object.values(estoque).filter(e => e.materialId === x.id).map(e => ({ d: e.data, c: e.criadoEm, t: e.tipo === 'correcao' ? 'Correção' : 'Entrada', q: n(e.qtd), extra: e.tipo !== 'correcao' && n(e.custo) ? `${brl(e.custo)} por ${u}` : '', e })),
+      ...Object.values(atend).flatMap(a => (a.pecas || []).filter(p => p.materialId === x.id).map(p => ({ d: a.data, c: a.criadoEm, t: osLabel(a) || 'OS', q: -n(p.qtd), extra: cliLabel(clientes[a.clienteId]) })))
+    ].sort((a, b) => (b.d || '').localeCompare(a.d || '') || (b.c || 0) - (a.c || 0));
+    movs.replaceChildren(ev.length ? el('div', {}, ev.slice(0, 40).map(v => el('div', { class: 'mov' },
+      el('span', {}, el('b', {}, v.t), el('span', { class: 'small muted' }, [fmtDate(v.d), v.extra].filter(Boolean).join(' · '))),
+      el('span', { class: 'q' }, (v.q > 0 ? '+' : v.q < 0 ? '−' : '') + matQ(Math.abs(v.q), x)),
+      v.e && el('button', { type: 'button', class: 'ghost', 'aria-label': 'Apagar lançamento', onclick: () => {
+        const g = v.e.gastoId && gastos[v.e.gastoId];
+        if (!confirm(`Apagar esta ${v.t.toLowerCase()} de ${matQ(Math.abs(v.q), x)}?${g ? ' O gasto lançado junto também será apagado.' : ''}`)) return;
+        if (g) store.doc('gastos/' + g.id).delete();
+        store.doc('estoque/' + v.e.id).delete();
+      } }, '×'))))
+      : el('div', { class: 'small muted' }, 'Nenhuma entrada ainda.'));
+  };
+  matUI = { id: m.id, upd };
+  box.replaceChildren(
+    el('button', { type: 'button', class: 'ghost ajback', onclick: () => { matCfg = null; renderMatCfg(true); window.scrollTo(0, 0); } }, '‹ Materiais'),
+    el('label', { class: 'f', for: 'matNome' }, 'Nome', nome),
+    el('div', { class: 'grid2' }, el('label', { class: 'f', for: 'matUn' }, 'Unidade', un), el('label', { class: 'f', for: 'matMin' }, 'Avisar quando chegar em', minimo)),
+    el('div', { class: 'grid2' }, el('label', { class: 'f', for: 'matCusto' }, 'Custo (R$)', custo), el('label', { class: 'f', for: 'matPreco' }, 'Preço de venda (R$)', preco)),
+    margem,
+    el('b', {}, 'Estoque'), qtd,
+    el('div', { class: 'row' }, el('button', { type: 'button', class: 'primary', onclick: () => entradaMat(materiais[m.id]) }, '+ Entrada'), el('button', { type: 'button', onclick: () => corrigirMat(materiais[m.id]) }, 'Corrigir estoque')),
+    movs,
+    el('button', { type: 'button', class: 'danger', style: 'align-self:flex-start', onclick: () => {
+      if (!confirm(`Apagar o material "${materiais[m.id].nome}"? As OS que já usaram continuam com ele.`)) return;
+      matCfg = null;
+      for (const e of Object.values(estoque)) if (e.materialId === m.id) store.doc('estoque/' + e.id).delete();
+      store.doc('materiais/' + m.id).delete();
+    } }, 'Apagar material'));
+  upd();
+}
+
 // Módulo de gestão (relatórios e faturamento) usa os mesmos dados e a mesma fila de envio
 window.CS = { $, el, brl, n, fmtDate, today, newId, store, calc, saveFile, toast, tipoTxt, tipos, cliLabel, osLabel, maskDoc, STATUS, uploadImg, shrink, imgOf, pickers, renderSync, openSvc,
-  get data() { return { clientes, maquinas, atend, faturas, gastos, aportes, cfg }; } };
-function rerender() { renderAtend(); renderClients(); $('#ajSum-clientes').textContent = Object.keys(clientes).length + ' cliente(s)'; }
+  saldos, acabando, matQ,
+  get data() { return { clientes, maquinas, atend, faturas, gastos, aportes, materiais, estoque, cfg }; } };
+function rerender() { renderAtend(); renderClients(); renderMatCfg(); renderEstBanner(); $('#ajSum-clientes').textContent = Object.keys(clientes).length + ' cliente(s)'; }
 
 /* ---------- Conexão com o armazenamento ---------- */
 if (LS.get('cs-cache', null)) { loaded = { c: true, m: true, a: true }; }
@@ -2224,7 +2415,11 @@ function renderPainel(body) {
       kpi(val - gTot >= 0 ? 'Lucro' : 'Prejuízo', brl(Math.abs(val - gTot)), 'serviços menos gastos', val || gTot ? (val - gTot >= 0 ? 'good' : 'alert') : ''),
       kpi('Gastos com o carro', brl(gCar), ''),
       kpi('Custo do carro por km', km ? brl(gCar / km) : '—', `cobra ${brl(n(D().cfg.valorKm))} por km`, km && gCar ? (gCar / km <= n(D().cfg.valorKm) ? 'good' : 'alert') : ''),
+      ...kpisMat(kpi),
       ...kpisEmp(kpi)));
+  const sd = CS.saldos(), baixo = CS.acabando(sd);
+  if (baixo.length) body.append(el('div', { class: 'gsec' }, el('h3', {}, 'Estoque baixo'),
+    tableEl(['Material', 'Em estoque', 'Avisar em'], baixo.map(m => [m.nome, CS.matQ(sd[m.id] || 0, m), n(m.minimo) ? CS.matQ(m.minimo, m) : '—']), [1, 2])));
   body.append(el('div', { class: 'gsec' }, el('h3', {}, 'Faturamento e gastos por mês'), monthChart()));
   const byCli = {};
   for (const a of os) { const k = a.clienteId; (byCli[k] = byCli[k] || { os: 0, h: 0, v: 0 }); byCli[k].os++; byCli[k].h += n(a.horas); byCli[k].v += calc(a).total; }
@@ -2321,10 +2516,24 @@ const REPORTS = {
       rows: l.map(a => [osLabel(a), fmtDate(a.data), clientes[a.clienteId]?.nome || '', machTxt(maquinas[a.maquinaId]), tipoTxt(a.tipo), CS.STATUS[a.status] || a.status, fmtH(a.horas), fmtN(a.km), brl(calc(a).total)]),
       foot: ['Total', '', '', '', '', l.length + ' OS', fmtH(l.reduce((s, a) => s + n(a.horas), 0)), fmtN(l.reduce((s, a) => s + n(a.km), 0)), brl(l.reduce((s, a) => s + calc(a).total, 0))] };
   } },
-  materiais: { t: 'Materiais de consumo', d: 'Materiais usados, quantidades e valores', build() {
-    const items = osDone().flatMap(a => (a.pecas || []).map(p => ({ ...p, os: a.id })));
-    const rows = sumBy(items, p => (p.desc || 'Sem descrição').trim().toLowerCase(), (k, l) => ({ d: l[0].desc || 'Sem descrição', q: l.reduce((s, p) => s + n(p.qtd), 0), v: l.reduce((s, p) => s + n(p.qtd) * n(p.valor), 0), os: new Set(l.map(p => p.os)).size })).sort((x, y) => y.v - x.v);
-    return { head: ['Material', 'Quantidade', 'Em quantas OS', 'Valor'], right: [1, 2, 3], rows: rows.map(r => [r.d, fmtN(r.q), r.os, brl(r.v)]), foot: ['Total', '', '', brl(rows.reduce((s, r) => s + r.v, 0))] };
+  materiais: { t: 'Materiais de consumo', d: 'Materiais usados, venda, custo e lucro', build() {
+    const mats = D().materiais || {}, items = osDone().flatMap(a => (a.pecas || []).map(p => ({ ...p, os: a.id })));
+    const rows = sumBy(items, p => mats[p.materialId] ? 'id:' + p.materialId : (p.desc || 'Sem descrição').trim().toLowerCase(), (k, l) => {
+      const v = l.reduce((s, p) => s + n(p.qtd) * n(p.valor), 0), cs = l.map(custoPeca);
+      return { d: k.startsWith('id:') ? mats[k.slice(3)].nome : l[0].desc || 'Sem descrição', q: l.reduce((s, p) => s + n(p.qtd), 0), v,
+        c: cs.some(c => c == null) ? null : l.reduce((s, p, i) => s + n(p.qtd) * cs[i], 0), os: new Set(l.map(p => p.os)).size };
+    }).sort((x, y) => y.v - x.v);
+    const ok = rows.filter(r => r.c != null), tc = ok.reduce((s, r) => s + r.c, 0), tl = ok.reduce((s, r) => s + r.v - r.c, 0);
+    return { head: ['Material', 'Qtd', 'OS', 'Venda', 'Custo', 'Lucro'], right: [1, 2, 3, 4, 5],
+      rows: rows.map(r => [r.d, fmtN(r.q), r.os, brl(r.v), r.c == null ? '—' : brl(r.c), r.c == null ? '—' : brl(r.v - r.c)]),
+      foot: ['Total', '', '', brl(rows.reduce((s, r) => s + r.v, 0)), ok.length ? brl(tc) : '—', ok.length ? brl(tl) : '—'] };
+  } },
+  estoque: { t: 'Estoque de materiais', d: 'Quantidade em estoque e valor parado (hoje)', all: true, build() {
+    const sd = CS.saldos(), low = new Set(CS.acabando(sd).map(m => m.id));
+    const l = Object.values(D().materiais || {}).sort((x, y) => x.nome.localeCompare(y.nome)), val = m => Math.max(0, sd[m.id] || 0) * n(m.custo);
+    return { head: ['Material', 'Em estoque', 'Avisar em', 'Custo un.', 'Valor em estoque'], right: [1, 2, 3, 4],
+      rows: l.map(m => [m.nome + (low.has(m.id) ? ' (acabando)' : ''), CS.matQ(sd[m.id] || 0, m), n(m.minimo) ? CS.matQ(m.minimo, m) : '—', n(m.custo) ? brl(m.custo) : '—', brl(val(m))]),
+      foot: ['Total', '', '', '', brl(l.reduce((s, m) => s + val(m), 0))] };
   } },
   pausas: { t: 'Pausas por motivo', d: 'Tempo parado em atendimento e por quê', build() {
     const ps = Object.values(D().atend).filter(a => inR(a.data)).flatMap(a => (a.apontamentos || []).filter(x => x.tipo === 'pausa' && x.fim));
@@ -2808,6 +3017,14 @@ function mesesPer(l) {
   return de <= ate ? mesesEmp(l, de, ate) : [];
 }
 // no Painel: o empréstimo aparece à parte, sem entrar no lucro
+// lucro nos materiais: valor cobrado na OS menos o custo guardado quando o material foi escolhido (ou o custo atual do cadastro)
+const custoPeca = p => { const c = n(p.custo) || n(D().materiais?.[p.materialId]?.custo); return c || null; };
+function kpisMat(kpi) {
+  if (!Object.keys(D().materiais || {}).length) return [];
+  let v = 0, c = 0;
+  for (const a of osDone()) for (const p of a.pecas || []) { const cu = custoPeca(p); if (cu != null) { v += n(p.qtd) * n(p.valor); c += n(p.qtd) * cu; } }
+  return [kpi(v - c >= 0 ? 'Lucro nos materiais' : 'Prejuízo nos materiais', brl(Math.abs(v - c)), c ? `${pct(v - c, c)} sobre o custo` : 'nenhum material com custo', v - c < 0 ? 'alert' : '')];
+}
 function kpisEmp(kpi) {
   const l = aportesHoje(); if (!aportesL().length) return [];
   atualizarSelic();
