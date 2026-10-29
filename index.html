@@ -422,6 +422,7 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
     <div class="ajpanel" data-aj="valores" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Valores</h2>
       <label class="f" for="cfgHora">Valor da hora técnica (R$)<input id="cfgHora" type="number" inputmode="decimal" step="0.01" min="0"></label>
       <label class="f" for="cfgKm">Valor por km rodado (R$)<input id="cfgKm" type="number" inputmode="decimal" step="0.01" min="0"></label>
+      <label class="f" for="cfgGarantia">Garantia dos serviços (dias)<input id="cfgGarantia" type="number" inputmode="numeric" step="1" min="0" placeholder="90"></label>
       <span class="savestate small cfgSaved"></span>
     </div>
     <div class="ajpanel" data-aj="materiais" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Materiais e estoque</h2>
@@ -470,6 +471,7 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
       <fieldset data-tab="geral"><legend>Cliente e máquina</legend>
         <label class="f" for="sCliente">Cliente<select id="sCliente" required></select></label>
         <label class="f" for="sMaquina">Máquina<select id="sMaquina"></select></label>
+        <div id="garantiaInfo" class="orcst warn small" hidden></div>
         <div id="machHist" class="hist" hidden></div>
         <div class="grid2">
           <label class="f" for="sTipo">Tipo de serviço<select id="sTipo"></select></label>
@@ -913,6 +915,7 @@ function svcCard(a, busca) {
         n(a.km) > 0 && el('span', { class: 'num' }, `${n(a.km)} km`),
         (a.fotos || []).length > 0 && el('span', {}, `${a.fotos.length} foto(s)`)),
       !['concluido', 'faturado'].includes(a.status) && (s => s && el('div', { class: 'small orcst ' + s[1] }, s[0]))(orcSit(a.id, a.orcamento)),
+      !['concluido', 'faturado'].includes(a.status) && (g => g && el('div', { class: 'small orcst warn' }, `Retorno em garantia (${osLabel(g)})`))(emGarantia(a.maquinaId, a.data, a.id)),
       isRunning(a) && el('div', { class: 'small live' }, (r => r.tipo === 'trabalho' ? 'Em atendimento agora' : r.tipo === 'pausa' ? `Pausado: ${r.motivo || ''}` : 'Em deslocamento agora')(a.apontamentos.find(x => !x.fim))),
       busca ? [a.problema && el('div', { class: 'small' }, el('b', {}, 'Falha: '), a.problema), a.causa && el('div', { class: 'small' }, el('b', {}, 'Causa: '), a.causa), a.descricao && el('div', { class: 'small' }, el('b', {}, 'Solução: '), a.descricao)]
         : (a.problema || a.descricao) && el('div', { class: 'small muted', style: 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }, a.problema || a.descricao));
@@ -1043,8 +1046,20 @@ function openSvc(id, preset = {}) {
 }
 $('#sCliente').addEventListener('change', e => { fillMachSelect(e.target.value, ''); renderHist(); });
 $('#sMaquina').addEventListener('change', renderHist);
+$('#sData').addEventListener('change', renderHist);
+/* Garantia: serviço finalizado na mesma máquina dentro do prazo (Ajustes › Valores, padrão 90 dias) */
+const garantiaDias = () => cfg.garantiaDias == null || cfg.garantiaDias === '' ? 90 : n(cfg.garantiaDias);
+function emGarantia(mid, data, semId) {
+  const dias = garantiaDias(); if (!mid || !dias) return null;
+  const ini = new Date(new Date(data || today()).getTime() - dias * 864e5).toISOString().slice(0, 10), fim = data || today();
+  return Object.values(atend).filter(a => a.id !== semId && a.maquinaId === mid && ['concluido', 'faturado'].includes(a.status) && a.data && a.data >= ini && a.data <= fim)
+    .sort((x, y) => y.data.localeCompare(x.data))[0] || null;
+}
+const garantiaTxt = (g, data) => { const d = Math.round((new Date(data || today()) - new Date(g.data)) / 864e5); return `Em garantia: ${osLabel(g)} de ${fmtDate(g.data)}${g.problema || g.descricao ? ' · ' + (g.problema || g.descricao) : ''} (${d} ${d === 1 ? 'dia' : 'dias'} atrás)`; };
 function renderHist() {
   const box = $('#machHist'), mid = $('#sMaquina').value;
+  const g = emGarantia(mid, $('#sData').value, editingSvc), gEl = $('#garantiaInfo');
+  gEl.hidden = !g; gEl.textContent = g ? garantiaTxt(g, $('#sData').value) : '';
   const h = mid ? Object.values(atend).filter(a => a.maquinaId === mid && a.id !== editingSvc).sort((x, y) => (y.data || '').localeCompare(x.data || '')).slice(0, 5) : [];
   box.hidden = !h.length; box.replaceChildren();
   if (!h.length) return;
@@ -1543,6 +1558,7 @@ function renderOrc() {
       el('div', { class: 'small muted' }, 'Enviado em ' + dataHora(env.em)),
       el('div', { class: 'row' },
         el('button', { type: 'button', class: 'primary', onclick: () => atend[editingSvc] && orcPdf(atend[editingSvc]) }, 'Baixar PDF'),
+        r?.aprovado && orc.copiado !== env.em && (orc.itens || []).some(p => (p.desc || '').trim()) && el('button', { type: 'button', onclick: lancarOrc }, 'Lançar itens nos materiais'),
         !r && el('button', { type: 'button', onclick: () => enviarOrc(true) }, 'Enviar de novo'),
         el('button', { type: 'button', onclick: () => {
           if (r?.aprovado && !confirm('O cliente já aprovou este orçamento. Se alterar, ele precisa aprovar de novo. Alterar?')) return;
@@ -1576,6 +1592,17 @@ function renderOrc() {
       el('button', { type: 'button', class: 'primary', onclick: () => enviarOrc(false) }, 'Enviar para aprovação'),
       el('button', { type: 'button', class: 'ghost', onclick: () => { if (!orcLinhas(orc).length || confirm('Apagar este orçamento?')) { orc = null; renderOrc(); svcAuto.kick(); } } }, 'Apagar orçamento')));
   somar();
+}
+// orçamento aprovado: os itens viram materiais de consumo da OS (ligados ao estoque quando o nome bate com um material)
+function lancarOrc() {
+  const itens = (orc.itens || []).filter(p => (p.desc || '').trim());
+  for (const p of itens) {
+    const m = matPorNome(p.desc);
+    parts.push({ desc: m ? m.nome : p.desc, qtd: n(p.qtd), valor: n(p.valor), ...(m && { materialId: m.id, custo: n(m.custo) }) });
+  }
+  orc.copiado = orc.enviado.em;
+  renderParts(); renderTotals(); renderOrc(); svcAuto.kick();
+  toast(`${itens.length} ${itens.length === 1 ? 'item lançado' : 'itens lançados'} em Materiais de consumo`);
 }
 async function orcPdf(a) {
   if (!window.jspdf?.jsPDF) { toast('O gerador de PDF não carregou. Recarregue o app com internet.'); return false; }
@@ -1707,7 +1734,7 @@ async function saveSvc(close, silent) {
     testes: testes.filter(x => x.desc.trim() || x.fotos.length).map(x => ({ desc: x.desc.trim(), fotos: x.fotos })),
     descricao: $('#sDesc').value.trim(), recomendacao: $('#sObsCli').value.trim(),
     pecas: parts.filter(p => (p.desc || '').trim() || n(p.valor)).map(p => ({ desc: (p.desc || '').trim(), qtd: n(p.qtd), valor: n(p.valor), ...(p.materialId && { materialId: p.materialId, custo: n(p.custo) }) })),
-    fotos: photos, fotoHorimetro: idFotos.fotoHorimetro, fotoChassi: idFotos.fotoChassi, apontamentos: apont, checklist: chk.map(x => ({ grupo: x.grupo || '', item: x.item, ref: chkRef(x), estado: x.estado || '', obs: (x.obs || '').trim(), fotos: x.fotos || [] })), assinatura: sig, orcamento: orc ? { horas: n(orc.horas) || '', km: n(orc.km) || '', itens: (orc.itens || []).filter(p => (p.desc || '').trim() || n(p.valor)).map(p => ({ desc: (p.desc || '').trim(), qtd: n(p.qtd), valor: n(p.valor) })), obs: (orc.obs || '').trim(), ...(orc.enviado && { enviado: orc.enviado }) } : null, atualizadoEm: Date.now() };
+    fotos: photos, fotoHorimetro: idFotos.fotoHorimetro, fotoChassi: idFotos.fotoChassi, apontamentos: apont, checklist: chk.map(x => ({ grupo: x.grupo || '', item: x.item, ref: chkRef(x), estado: x.estado || '', obs: (x.obs || '').trim(), fotos: x.fotos || [] })), assinatura: sig, orcamento: orc ? { horas: n(orc.horas) || '', km: n(orc.km) || '', itens: (orc.itens || []).filter(p => (p.desc || '').trim() || n(p.valor)).map(p => ({ desc: (p.desc || '').trim(), qtd: n(p.qtd), valor: n(p.valor) })), obs: (orc.obs || '').trim(), ...(orc.enviado && { enviado: orc.enviado }), ...(orc.copiado && { copiado: orc.copiado }) } : null, atualizadoEm: Date.now() };
   if (!prev.criadoEm) data.criadoEm = Date.now();
   if (!prev.numero) data.numero = Math.max(0, ...Object.values(atend).map(a => a.numero || 0)) + 1;
   if (data.status === 'faturado' && !prev.faturadoEm) data.faturadoEm = Date.now();
@@ -1734,12 +1761,16 @@ $('#fab').onclick = () => {
   const res = el('div', { class: 'qres' });
   const maq = el('select', { id: 'qMaquina', disabled: true });
   const falha = el('textarea', { id: 'qFalha', rows: 3, placeholder: 'Ex.: Trator perdendo força em carga' });
+  const garInfo = el('div', { class: 'orcst warn small', hidden: true });
+  const fillGar = () => { const g = emGarantia(maq.value, today()); garInfo.hidden = !g; garInfo.textContent = g ? garantiaTxt(g) : ''; };
+  maq.addEventListener('change', fillGar);
   const fillMaq = () => {
     const ms = machinesOf(cid);
     maq.replaceChildren(el('option', { value: '' }, !cid ? 'Escolha o cliente primeiro' : ms.length ? 'Escolha a máquina' : 'Nenhuma máquina cadastrada'),
       ...ms.map(m => el('option', { value: m.id }, `${m.tipo} ${m.marca} ${m.modelo}`.trim() + (m.serie ? ` · ${m.serie}` : ''))));
     maq.disabled = !ms.length;
     if (ms.length === 1) maq.value = ms[0].id;
+    fillGar();
   };
   const drawRes = () => {
     const q = norm(busca.value), cs = Object.values(clientes).filter(c => !q || norm(c.nome + ' ' + (c.fazenda || '')).includes(q)).sort((a, b) => a.nome.localeCompare(b.nome)).slice(0, 8);
@@ -1754,7 +1785,7 @@ $('#fab').onclick = () => {
     el('div', { class: 'qdlg-box' },
       el('h3', {}, 'Nova OS'),
       el('label', { class: 'f', for: 'qBusca' }, 'Cliente', busca), res,
-      el('label', { class: 'f', for: 'qMaquina' }, 'Máquina', maq),
+      el('label', { class: 'f', for: 'qMaquina' }, 'Máquina', maq), garInfo,
       el('label', { class: 'f', for: 'qFalha' }, 'Falha', falha),
       el('div', { class: 'row', style: 'justify-content:flex-end' },
         el('button', { type: 'button', class: 'ghost', onclick: close }, 'Cancelar'),
@@ -2002,6 +2033,10 @@ async function buildPdf(a, orc = false) {
     ['Materiais de consumo', (a.pecas || []).length ? `${a.pecas.length} item(ns)` : '—', brl(t.pecas)]],
     { right: [1, 2], columnStyles: { 1: { cellWidth: 34 }, 2: { cellWidth: 38 } }, foot: [['Total', '', brl(t.total)]], showFoot: 'lastPage',
       didParseCell: d => { if (d.section === 'foot' && d.column.index === 2) d.cell.styles.textColor = YEL; } });
+  if (['concluido', 'faturado'].includes(a.status) && garantiaDias() && a.data) {
+    const ate = new Date(new Date(a.data).getTime() + garantiaDias() * 864e5).toISOString().slice(0, 10);
+    para(`Garantia do serviço: ${garantiaDias()} dias, até ${fmtDate(ate)}.`, 9);
+  }
 
   if (a.assinatura) {
     const s = await imgData(a.assinatura.id, 800);
@@ -2228,18 +2263,18 @@ function renderCfg() {
   renderMotivos(); renderChkCfg(); renderTiposCfg(); renderCatsCfg();
   const qt = (k, t) => { const e = $('#ajSum-' + k); if (e) e.textContent = t; };
   qt('empresa', [cfg.nome, cfg.cnpj].filter(Boolean).join(' · ') || 'Dados da empresa');
-  qt('valores', `Hora ${brl(cfg.valorHora || 0)} · km ${brl(cfg.valorKm || 0)}`);
+  qt('valores', `Hora ${brl(cfg.valorHora || 0)} · km ${brl(cfg.valorKm || 0)} · garantia ${garantiaDias()} dias`);
   qt('tipos', tipos().length + ' tipos');
   qt('categorias', cats().length + ' categorias');
   qt('motivos', motivos().length + ' motivos');
   qt('checklist', chkGrupos().length ? chkGrupos().length + (chkGrupos().length > 1 ? ' grupos' : ' grupo') : 'Nenhum grupo');
   qt('backup', ultimaCopia() ? 'Última cópia automática ' + fmtDate(ultimaCopia()) : 'Planilha ou cópia completa');
   const put = (sel, v) => { if (document.activeElement !== $(sel)) $(sel).value = v; };
-  put('#cfgNome', cfg.nome || ''); put('#cfgCnpj', cfg.cnpj || ''); put('#cfgTel', cfg.telefone || ''); put('#cfgEmail', cfg.email || ''); put('#cfgEnd', cfg.endereco || ''); put('#cfgHora', cfg.valorHora || ''); put('#cfgKm', cfg.valorKm || '');
+  put('#cfgNome', cfg.nome || ''); put('#cfgCnpj', cfg.cnpj || ''); put('#cfgTel', cfg.telefone || ''); put('#cfgEmail', cfg.email || ''); put('#cfgEnd', cfg.endereco || ''); put('#cfgHora', cfg.valorHora || ''); put('#cfgKm', cfg.valorKm || ''); put('#cfgGarantia', cfg.garantiaDias ?? '');
   $('#companyName').textContent = cfg.nome || 'Longhi Manutenções';
   if (!$('#svcSheet').hidden) renderTotals();
 }
-const cfgAuto = autosaver(async () => { await store.doc('config/geral').set({ ...cfg, nome: $('#cfgNome').value.trim(), cnpj: $('#cfgCnpj').value.trim(), telefone: $('#cfgTel').value.trim(), email: $('#cfgEmail').value.trim(), endereco: $('#cfgEnd').value.trim(), valorHora: n($('#cfgHora').value), valorKm: n($('#cfgKm').value) }); }, '.cfgSaved');
+const cfgAuto = autosaver(async () => { await store.doc('config/geral').set({ ...cfg, nome: $('#cfgNome').value.trim(), cnpj: $('#cfgCnpj').value.trim(), telefone: $('#cfgTel').value.trim(), email: $('#cfgEmail').value.trim(), endereco: $('#cfgEnd').value.trim(), valorHora: n($('#cfgHora').value), valorKm: n($('#cfgKm').value), garantiaDias: $('#cfgGarantia').value === '' ? null : Math.round(n($('#cfgGarantia').value)) }); }, '.cfgSaved');
 $('#cfgForm').addEventListener('submit', e => { e.preventDefault(); cfgAuto.flush(); });
 document.querySelectorAll('#cfgForm input[id^="cfg"]').forEach(i => i.addEventListener('input', () => cfgAuto.kick()));
 function showAj(k) {
@@ -2320,6 +2355,21 @@ function corrigirMat(m) {
     toast('Estoque corrigido');
   }, 'Salvar');
 }
+// Lista de compras: o que está acabando, com a quantidade sugerida (o dobro do mínimo menos o que tem), para mandar ao fornecedor
+function listaCompras(s) {
+  const l = acabando(s);
+  const linhas = l.map((m, i) => {
+    const tem = s[m.id] || 0, alvo = n(m.minimo) > 0 ? 2 * n(m.minimo) : 1;
+    const q = el('input', { id: 'lc_' + i, type: 'number', inputmode: 'decimal', step: 'any', min: '0', value: Math.max(1, Math.ceil(alvo - tem)), style: 'width:96px' });
+    return { m, q, row: el('label', { class: 'mov', for: 'lc_' + i }, el('span', {}, el('b', {}, m.nome), el('span', { class: 'small muted' }, `tem ${matQ(tem, m)}`)), el('span', { class: 'small muted' }, m.unidade || 'un'), q) };
+  });
+  const outros = el('textarea', { id: 'lcOutros', rows: 2 });
+  dialogo('Lista de compras', [el('div', {}, linhas.map(x => x.row)), el('label', { class: 'f', for: 'lcOutros' }, 'Outros itens', outros)], () => {
+    const itens = [...linhas.filter(x => n(x.q.value) > 0).map(x => `- ${x.m.nome}: ${matQ(n(x.q.value), x.m)}`), ...outros.value.split('\n').map(t => t.trim()).filter(Boolean).map(t => '- ' + t)];
+    if (!itens.length) { toast('A lista está vazia'); return false; }
+    shareTxt('Lista de compras', `Lista de compras${cfg.nome ? ' · ' + cfg.nome : ''} · ${fmtDate(today())}\n\n${itens.join('\n')}`);
+  }, 'Enviar');
+}
 let matCfg = null, matUI = null;
 function renderMatCfg(force) {
   const box = $('#matBox'); if (!box) return;
@@ -2340,6 +2390,7 @@ function renderMatCfg(force) {
     novo.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
     const chev = () => (t => (t.innerHTML = '<svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg>', t.content.firstChild))(document.createElement('template'));
     box.replaceChildren(
+      ...(low.size ? [el('div', {}, el('button', { type: 'button', class: 'primary', onclick: () => listaCompras(s) }, 'Lista de compras'))] : []),
       ms.length ? el('div', { class: 'ajlist' }, ms.map(x => el('button', { type: 'button', class: 'ajitem', onclick: () => { matCfg = x.id; renderMatCfg(true); window.scrollTo(0, 0); } },
         el('span', {}, el('b', {}, x.nome), el('span', { class: 'small ' + (low.has(x.id) ? 'matlow' : 'muted') },
           [controla.has(x.id) ? `${matQ(s[x.id] || 0, x)} em estoque` : 'Sem estoque lançado', n(x.preco) ? 'venda ' + brl(x.preco) : ''].filter(Boolean).join(' · '))), chev())))
