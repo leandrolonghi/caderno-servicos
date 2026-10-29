@@ -14,7 +14,7 @@ jobs:
   selic:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: python3 .github/selic.py
       - run: |
           git diff --quiet -- selic.json 2>/dev/null && git ls-files --error-unmatch selic.json >/dev/null 2>&1 && exit 0
