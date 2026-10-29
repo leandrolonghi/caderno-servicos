@@ -96,6 +96,11 @@ legend{font-family:var(--display);font-size:16px;text-transform:uppercase;letter
 .mov > span:first-child{display:flex;flex-direction:column;min-width:0}
 .mov .q{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
 .mov button{min-height:36px;min-width:36px;padding:0}
+.toast:has(.toastbtn){display:flex;align-items:center;white-space:nowrap}
+.toast[hidden]{display:none}
+.toastbtn{background:none;border:0;color:inherit;font:inherit;font-weight:700;text-decoration:underline;padding:0 0 0 14px;min-height:0;cursor:pointer}
+.lix{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center}
+.lix > div{display:flex;flex-direction:column;gap:2px;min-width:0}
 .chkline{display:flex;align-items:center;gap:10px;font-weight:500}
 .chkline input{width:22px;height:22px;min-height:0;margin:0;accent-color:var(--accent)}
 .idphotos{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -400,7 +405,7 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
     <div id="ajMenu">
       <button type="button" class="ghost ajback" id="ajHome">‹ Início</button>
       <h2>Ajustes</h2>
-      <div class="ajlist"><button type="button" class="ajitem" data-aj="clientes"><span><b>Clientes e máquinas</b><span class="small muted" id="ajSum-clientes"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="materiais"><span><b>Materiais e estoque</b><span class="small muted" id="ajSum-materiais"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="tipos"><span><b>Tipos de serviço</b><span class="small muted" id="ajSum-tipos"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="categorias"><span><b>Categorias de falha</b><span class="small muted" id="ajSum-categorias"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="empresa"><span><b>Empresa</b><span class="small muted" id="ajSum-empresa"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="valores"><span><b>Valores</b><span class="small muted" id="ajSum-valores"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="motivos"><span><b>Motivos de pausa</b><span class="small muted" id="ajSum-motivos"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="checklist"><span><b>Checklist</b><span class="small muted" id="ajSum-checklist"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="conta"><span><b>Conta</b><span class="small muted" id="ajSum-conta"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="backup"><span><b>Cópia dos dados</b><span class="small muted" id="ajSum-backup"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button></div>
+      <div class="ajlist"><button type="button" class="ajitem" data-aj="clientes"><span><b>Clientes e máquinas</b><span class="small muted" id="ajSum-clientes"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="materiais"><span><b>Materiais e estoque</b><span class="small muted" id="ajSum-materiais"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="tipos"><span><b>Tipos de serviço</b><span class="small muted" id="ajSum-tipos"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="categorias"><span><b>Categorias de falha</b><span class="small muted" id="ajSum-categorias"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="empresa"><span><b>Empresa</b><span class="small muted" id="ajSum-empresa"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="valores"><span><b>Valores</b><span class="small muted" id="ajSum-valores"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="motivos"><span><b>Motivos de pausa</b><span class="small muted" id="ajSum-motivos"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="checklist"><span><b>Checklist</b><span class="small muted" id="ajSum-checklist"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="conta"><span><b>Conta</b><span class="small muted" id="ajSum-conta"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="backup"><span><b>Cópia dos dados</b><span class="small muted" id="ajSum-backup"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="lixeira"><span><b>Excluídos</b><span class="small muted" id="ajSum-lixeira"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button></div>
     </div>
     <div class="ajpanel" data-aj="empresa" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Empresa</h2>
       <label class="f" for="cfgNome">Nome da empresa<input id="cfgNome"></label>
@@ -439,6 +444,10 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
     <div class="ajpanel" data-aj="conta" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Conta</h2>
       <p style="margin:0" id="contaEmail"></p>
       <div class="row"><button type="button" class="danger" id="btnSair">Sair da conta</button></div>
+    </div>
+    <div class="ajpanel" data-aj="lixeira" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Excluídos</h2>
+      <p class="small muted" style="margin:0">Ficam guardados por 90 dias.</p>
+      <div class="list" id="lixList"></div>
     </div>
     <div class="ajpanel" data-aj="backup" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Cópia dos dados</h2>
       <p class="small muted" style="margin:0">Baixe uma planilha com todos os atendimentos ou uma cópia completa para guardar.</p>
@@ -658,14 +667,15 @@ const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 };
-const COLS = { clientes: 'c', maquinas: 'm', atendimentos: 'a', faturas: 'f', gastos: 'g', aportes: 'p', materiais: 'mt', estoque: 'e' };
+const COLS = { clientes: 'c', maquinas: 'm', atendimentos: 'a', faturas: 'f', gastos: 'g', aportes: 'p', materiais: 'mt', estoque: 'e', lixeira: 'lx' };
 let server = LS.get('cs-cache', null) || { clientes: {}, maquinas: {}, atendimentos: {}, config: null };
 if (!server.faturas) server.faturas = {};
 if (!server.gastos) server.gastos = {};
 if (!server.aportes) server.aportes = {};
 if (!server.materiais) server.materiais = {};
 if (!server.estoque) server.estoque = {};
-let faturas = {}, gastos = {}, aportes = {}, materiais = {}, estoque = {};
+if (!server.lixeira) server.lixeira = {};
+let faturas = {}, gastos = {}, aportes = {}, materiais = {}, estoque = {}, lixeira = {};
 let outbox = LS.get('cs-outbox', []);
 let syncing = false, lastSyncOk = true;
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej({ code: 'timeout' }), ms))]);
@@ -680,9 +690,9 @@ function applyOp(state, op) {
   else m[id] = { ...op.data, id };
 }
 function recompute() {
-  const st = { clientes: { ...server.clientes }, maquinas: { ...server.maquinas }, atendimentos: { ...server.atendimentos }, faturas: { ...server.faturas }, gastos: { ...server.gastos }, aportes: { ...server.aportes }, materiais: { ...server.materiais }, estoque: { ...server.estoque }, config: server.config };
+  const st = { clientes: { ...server.clientes }, maquinas: { ...server.maquinas }, atendimentos: { ...server.atendimentos }, faturas: { ...server.faturas }, gastos: { ...server.gastos }, aportes: { ...server.aportes }, materiais: { ...server.materiais }, estoque: { ...server.estoque }, lixeira: { ...server.lixeira }, config: server.config };
   for (const op of outbox) applyOp(st, op);
-  clientes = st.clientes; maquinas = st.maquinas; atend = st.atendimentos; faturas = st.faturas; gastos = st.gastos; aportes = st.aportes; materiais = st.materiais; estoque = st.estoque;
+  clientes = st.clientes; maquinas = st.maquinas; atend = st.atendimentos; faturas = st.faturas; gastos = st.gastos; aportes = st.aportes; materiais = st.materiais; estoque = st.estoque; lixeira = st.lixeira;
   const nc = { valorHora: 0, valorKm: 0, nome: '', pagamento: '', ...(st.config || {}) };
   if (JSON.stringify(nc) !== JSON.stringify(cfg) || !recompute.done) { cfg = nc; renderCfg(); recompute.done = true; }
   rerender(); renderSync();
@@ -696,9 +706,51 @@ const store = {
       LS.set('cs-outbox', outbox); recompute(); flush();
       return Promise.resolve();
     };
-    return { set: d => enqueue('set', d), update: d => enqueue('update', d), delete: () => enqueue('delete') };
+    return { set: d => enqueue('set', d), update: d => enqueue('update', d), delete: () => { paraLixeira(path); return enqueue('delete'); } };
   }
 };
+/* Lixeira: o que é excluído fica guardado 90 dias e pode ser restaurado.
+   Exclusões feitas no mesmo toque (cliente e máquinas, material e entradas) viram um item só. */
+let lixo = null;
+function paraLixeira(path) {
+  const [col, id] = path.split('/');
+  const atual = ({ clientes, maquinas, atendimentos: atend, faturas, gastos, aportes, materiais, estoque })[col]?.[id];
+  if (!atual) return;
+  if (!lixo) {
+    lixo = [];
+    setTimeout(() => {
+    const itens = lixo, lid = newId(); lixo = null;
+    store.doc('lixeira/' + lid).set({ id: lid, excluidoEm: Date.now(), itens });
+    const t = $('#toast');
+    if (t.hidden || t.querySelector('.toastbtn')) t.textContent = 'Excluído';
+    t.append(el('button', { type: 'button', class: 'toastbtn', onclick: () => { restaurar(lid); } }, 'Desfazer'));
+    t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 6000);
+    }, 0);
+  }
+  lixo.push({ col, id, data: JSON.parse(JSON.stringify(atual)) });
+}
+function restaurar(lid) {
+  const l = lixeira[lid]; if (!l) return;
+  for (const x of l.itens || []) store.doc(x.col + '/' + x.id).set(x.data);
+  store.doc('lixeira/' + lid).delete();
+  toast('Restaurado: ' + lixNome(principal(l)));
+}
+const LIX_ORDEM = ['atendimentos', 'clientes', 'materiais', 'faturas', 'gastos', 'aportes', 'estoque', 'maquinas'];
+const principal = l => [...(l.itens || [])].sort((x, y) => LIX_ORDEM.indexOf(x.col) - LIX_ORDEM.indexOf(y.col))[0] || {};
+function lixNome(x, grupo) {
+  const d = x.data || {};
+  switch (x.col) {
+    case 'atendimentos': return [osLabel(d) || 'OS', clientes[d.clienteId]?.nome].filter(Boolean).join(' · ');
+    case 'clientes': return 'Cliente ' + (d.nome || '');
+    case 'maquinas': return 'Máquina ' + [d.tipo, d.marca, d.modelo].filter(Boolean).join(' ');
+    case 'faturas': return 'Fatura ' + String(d.numero || 0).padStart(4, '0');
+    case 'gastos': return ['Gasto', d.categoria, brl(d.valor)].filter(Boolean).join(' ');
+    case 'aportes': return `${d.tipo === 'devolucao' ? 'Devolução' : 'Aporte'} ${brl(d.valor)}`;
+    case 'materiais': return 'Material ' + (d.nome || '');
+    case 'estoque': { const m = materiais[d.materialId], g = grupo?.itens?.find(i => i.col === 'materiais' && i.id === d.materialId)?.data; return `${d.tipo === 'correcao' ? 'Correção' : 'Entrada'} de ${matQ(Math.abs(n(d.qtd)), m || g)}${m ? ' · ' + m.nome : ''}`; }
+  }
+  return 'Item';
+}
 
 /* fotos guardadas no aparelho (IndexedDB) */
 const idb = (() => {
@@ -2217,11 +2269,28 @@ function renderMatCfg(force) {
   upd();
 }
 
+function renderLixeira() {
+  const DIAS90 = 90 * 864e5, l = Object.values(lixeira).sort((x, y) => (y.excluidoEm || 0) - (x.excluidoEm || 0));
+  // limpa o que passou de 90 dias (uma vez por abertura do app, depois que os dados carregaram)
+  if (loaded.a && !renderLixeira.limpo) {
+    renderLixeira.limpo = true;
+    const velhos = l.filter(x => Date.now() - (x.excluidoEm || 0) > DIAS90);
+    if (velhos.length) return velhos.forEach(x => store.doc('lixeira/' + x.id).delete());
+  }
+  $('#ajSum-lixeira').textContent = l.length ? `${l.length} ${l.length === 1 ? 'item' : 'itens'}` : 'Nada excluído';
+  const quando = t => { const d = new Date(t); return `${d.toLocaleDateString('pt-BR')} às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`; };
+  $('#lixList').replaceChildren(...(l.length ? l.map(x => {
+    const p = principal(x), outros = (x.itens || []).filter(i => i !== p).map(i => lixNome(i, x));
+    return el('div', { class: 'card lix' },
+      el('div', {}, el('b', {}, lixNome(p)), outros.length > 0 && el('span', { class: 'small muted' }, 'Junto: ' + outros.join(', ')), el('span', { class: 'small muted' }, 'Excluído em ' + quando(x.excluidoEm))),
+      el('button', { type: 'button', onclick: () => restaurar(x.id) }, 'Restaurar'));
+  }) : [el('div', { class: 'empty' }, 'Nada excluído nos últimos 90 dias.')]));
+}
 // Módulo de gestão (relatórios e faturamento) usa os mesmos dados e a mesma fila de envio
 window.CS = { $, el, brl, n, fmtDate, today, newId, store, calc, saveFile, toast, tipoTxt, tipos, cliLabel, osLabel, maskDoc, STATUS, uploadImg, shrink, imgOf, pickers, renderSync, openSvc,
   saldos, acabando, matQ,
   get data() { return { clientes, maquinas, atend, faturas, gastos, aportes, materiais, estoque, cfg }; } };
-function rerender() { renderAtend(); renderClients(); renderMatCfg(); renderEstBanner(); $('#ajSum-clientes').textContent = Object.keys(clientes).length + ' cliente(s)'; }
+function rerender() { renderAtend(); renderClients(); renderMatCfg(); renderEstBanner(); renderLixeira(); $('#ajSum-clientes').textContent = Object.keys(clientes).length + ' cliente(s)'; }
 
 /* ---------- Conexão com o armazenamento ---------- */
 if (LS.get('cs-cache', null)) { loaded = { c: true, m: true, a: true }; }
