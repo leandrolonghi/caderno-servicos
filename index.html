@@ -2187,7 +2187,8 @@ function renderPainel(body) {
       kpi('Gastos', brl(gTot), `${gs.length} lançamento${gs.length === 1 ? '' : 's'}`),
       kpi(val - gTot >= 0 ? 'Lucro' : 'Prejuízo', brl(Math.abs(val - gTot)), 'serviços menos gastos', val || gTot ? (val - gTot >= 0 ? 'good' : 'alert') : ''),
       kpi('Gastos com o carro', brl(gCar), ''),
-      kpi('Custo do carro por km', km ? brl(gCar / km) : '—', `cobra ${brl(n(D().cfg.valorKm))} por km`, km && gCar ? (gCar / km <= n(D().cfg.valorKm) ? 'good' : 'alert') : '')));
+      kpi('Custo do carro por km', km ? brl(gCar / km) : '—', `cobra ${brl(n(D().cfg.valorKm))} por km`, km && gCar ? (gCar / km <= n(D().cfg.valorKm) ? 'good' : 'alert') : ''),
+      ...kpisEmp(kpi)));
   body.append(el('div', { class: 'gsec' }, el('h3', {}, 'Serviços realizados por mês'), monthChart()));
   const byCli = {};
   for (const a of os) { const k = a.clienteId; (byCli[k] = byCli[k] || { os: 0, h: 0, v: 0 }); byCli[k].os++; byCli[k].h += n(a.horas); byCli[k].v += calc(a).total; }
@@ -2310,6 +2311,21 @@ const REPORTS = {
     return { head: ['Mês', 'Serviços', 'Gastos', 'Resultado', 'Km', 'Gastos do carro', 'Custo por km'], right: [1, 2, 3, 4, 5, 6],
       rows: rows.map(r => [ymTxt(r.k), brl(r.serv), brl(r.gas), brl(r.serv - r.gas), fmtN(r.km), brl(r.car), ckm(r)]),
       foot: ['Total', brl(t.serv), brl(t.gas), brl(t.serv - t.gas), fmtN(t.km), brl(t.car), ckm(t)] };
+  } },
+  emprestimo: { t: 'Empréstimo por mês', d: 'Aportes, devoluções, juros Selic e saldo a devolver', build() {
+    atualizarSelic();
+    const m = mesesPer(aportesHoje()), t = f => brl(m.reduce((s, x) => s + x[f], 0));
+    return { head: ['Mês', 'Aportes', 'Devoluções', 'Juros Selic', 'Saldo a devolver'], right: [1, 2, 3, 4],
+      rows: m.map(r => [ymTxt(r.k), brl(r.a), brl(r.d), brl(r.c), brl(r.s)]),
+      foot: ['Total', t('a'), t('d'), t('c'), m.length ? brl(m[m.length - 1].s) : ''] };
+  } },
+  emprestimoLanc: { t: 'Aportes e devoluções', d: 'Cada lançamento do empréstimo, corrigido pela Selic até hoje', build() {
+    atualizarSelic();
+    const hoje = today(), l = aportesHoje().filter(x => inR(x.data)).sort((x, y) => x.data.localeCompare(y.data) || (x.criadoEm || 0) - (y.criadoEm || 0));
+    const v = x => (ehDev(x) ? -1 : 1) * n(x.valor), vc = x => v(x) * fatorSelic(x.data, hoje);
+    return { head: ['Data', 'Lançamento', 'Descrição', 'Valor', 'Corrigido hoje'], right: [3, 4],
+      rows: l.map(x => [fmtDate(x.data), ehDev(x) ? 'Devolução' : 'Aporte', x.descricao || '', brl(v(x)), brl(vc(x))]),
+      foot: ['Total', '', '', brl(l.reduce((s, x) => s + v(x), 0)), brl(l.reduce((s, x) => s + vc(x), 0))] };
   } },
   receber: { t: 'Contas a receber', d: 'Faturas em aberto e vencidas (todas as datas)', all: true, build() {
     const { clientes } = D(), l = fats().filter(f => f.status === 'aberta').sort((x, y) => (x.vencimento || '').localeCompare(y.vencimento || ''));
@@ -2677,8 +2693,10 @@ async function atualizarSelic() {
   if (!mudou) return;
   selicDias = Object.keys(selic.serie).sort();
   try { localStorage.setItem('cs-selic', JSON.stringify(selic)); } catch {}
-  if (!$('#gSheet').hidden && tab === 'aportes') render();
+  const ae = document.activeElement;
+  if (!$('#gSheet').hidden && !(ae && $('#gBody').contains(ae) && ae.matches('input, textarea, select'))) render();
 }
+atualizarSelic();
 const diaUtil = iso => { const w = new Date(iso + 'T12:00:00').getDay(); return w > 0 && w < 6; };
 // correção do dia "de" (inclusive) até o dia "ate" (sem contar a taxa do próprio "ate")
 function fatorSelic(de, ate) {
@@ -2693,12 +2711,43 @@ const ehDev = x => x.tipo === 'devolucao';
 const aportesL = () => Object.values(D().aportes || {});
 const saldoEm = (l, ate) => l.filter(x => x.data && x.data <= ate).reduce((s, x) => s + (ehDev(x) ? -1 : 1) * n(x.valor) * fatorSelic(x.data, ate), 0);
 const fimMes = k => { const [y, m] = k.split('-').map(Number); return `${k}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`; };
+const somaV = xs => xs.reduce((s, x) => s + n(x.valor), 0);
+const aportesHoje = () => aportesL().filter(x => x.data && x.data <= today());
+// mês a mês de "de" até "ate" (AAAA-MM): aportes, devoluções, correção e saldo no fim do mês
+function mesesEmp(l, de, ate) {
+  const hoje = today(), r = [];
+  let antes = saldoEm(l, addDays(de + '-01', -1));
+  for (let k = de; k <= ate; k = addDays(k + '-28', 4).slice(0, 7)) {
+    const doMes = l.filter(x => x.data.startsWith(k)), s = saldoEm(l, k === hoje.slice(0, 7) ? hoje : fimMes(k));
+    const a = somaV(doMes.filter(x => !ehDev(x))), d = somaV(doMes.filter(ehDev));
+    r.push({ k, a, d, c: s - antes - a + d, s }); antes = s;
+  }
+  return r;
+}
+// meses do período escolhido na Gestão, do primeiro lançamento até hoje
+function mesesPer(l) {
+  if (!l.length) return [];
+  const r = range(), hoje = today().slice(0, 7), ini = l.reduce((m, x) => x.data < m ? x.data : m, today()).slice(0, 7);
+  const de = r[0].slice(0, 7) > ini ? r[0].slice(0, 7) : ini, ate = r[1].slice(0, 7) < hoje ? r[1].slice(0, 7) : hoje;
+  return de <= ate ? mesesEmp(l, de, ate) : [];
+}
+// no Painel: o empréstimo aparece à parte, sem entrar no lucro
+function kpisEmp(kpi) {
+  const l = aportesHoje(); if (!aportesL().length) return [];
+  atualizarSelic();
+  const m = mesesPer(l), t = f => m.reduce((s, x) => s + x[f], 0), q = dev => l.filter(x => ehDev(x) === dev && inR(x.data)).length;
+  const saldo = saldoEm(l, today());
+  return [kpi('Empréstimo a devolver', brl(Math.max(saldo, 0)), 'corrigido pela Selic até hoje'),
+    kpi('Aportes', brl(t('a')), `${q(false)} aporte${q(false) === 1 ? '' : 's'}`),
+    kpi('Devoluções', brl(t('d')), `${q(true)} devoluç${q(true) === 1 ? 'ão' : 'ões'}`),
+    kpi('Juros Selic', brl(t('c')), 'sobre o empréstimo')];
+}
 const pDraft = {};
 function renderAportes(body) {
   if (sub && sub.startsWith('p:')) return renderAporte(body, ...sub.slice(2).split(':'));
   atualizarSelic();
-  const hoje = today(), l = aportesL().filter(x => x.data && x.data <= hoje);
-  const ap = l.filter(x => !ehDev(x)), dv = l.filter(ehDev), soma = xs => xs.reduce((s, x) => s + n(x.valor), 0);
+  const hoje = today(), l = aportesHoje();
+  const ap = l.filter(x => !ehDev(x)), dv = l.filter(ehDev), soma = somaV;
   const saldo = saldoEm(l, hoje), corr = saldo - soma(ap) + soma(dv);
   const ult = selicDias[selicDias.length - 1];
   const ano = ult ? ((1 + selic.serie[ult] / 100) ** 252 - 1) * 100 : 0;
@@ -2716,15 +2765,7 @@ function renderAportes(body) {
     !ult ? el('p', { class: 'small muted', style: 'margin:0' }, 'Sem a taxa Selic neste aparelho. Abra com internet para corrigir o saldo.')
       : ult < addDays(hoje, -7) ? el('p', { class: 'small muted', style: 'margin:0' }, `Taxa Selic até ${fmtDate(ult)}. Abra com internet para atualizar.`) : null].filter(Boolean));
   if (l.length) {
-    const meses = [];
-    for (let k = l.reduce((m, x) => x.data < m ? x.data : m, hoje).slice(0, 7); k <= hoje.slice(0, 7); k = addDays(k + '-28', 4).slice(0, 7)) meses.push(k);
-    let antes = 0;
-    const rows = meses.map(k => {
-      const fim = k === hoje.slice(0, 7) ? hoje : fimMes(k), doMes = l.filter(x => x.data.startsWith(k));
-      const a = soma(doMes.filter(x => !ehDev(x))), d = soma(doMes.filter(ehDev)), s = saldoEm(l, fim), c = s - antes - a + d;
-      antes = s;
-      return [ymTxt(k), brl(c), brl(s)];
-    });
+    const rows = mesesEmp(l, l.reduce((m, x) => x.data < m ? x.data : m, hoje).slice(0, 7), hoje.slice(0, 7)).map(r => [ymTxt(r.k), brl(r.c), brl(r.s)]);
     body.append(el('div', { class: 'gsec' }, el('h3', {}, 'Mês a mês'), tableEl(['Mês', 'Correção', 'Saldo'], rows, [1, 2])));
   }
   const todos = aportesL().sort((x, y) => (y.data || '').localeCompare(x.data || '') || (y.criadoEm || 0) - (x.criadoEm || 0));
