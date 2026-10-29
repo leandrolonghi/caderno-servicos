@@ -9,6 +9,7 @@
 -- Enquanto a OS está em deslocamento ou atendimento, o cliente vê no mapa a última
 -- posição que o app enviou.
 -- O checklist de inspeção aparece com a situação, a observação, a foto de referência e as fotos de cada ponto.
+-- Quando você envia um orçamento pelo app, o cliente aprova ou recusa no portal; a resposta volta para o app.
 -- As senhas ficam guardadas embaralhadas (bcrypt): nem você consegue ler depois.
 -- A senha que você cria é provisória: no primeiro acesso o cliente cria a senha dele.
 -- A sessão termina ao fechar a aba do portal (e vence sozinha depois de 30 minutos sem uso).
@@ -246,7 +247,14 @@ begin
         'posicao', case when a.data->>'status' in ('deslocamento', 'aguardando', 'andamento') then
            (select jsonb_build_object('lat', p.lat, 'lng', p.lng, 'precisao', p.precisao, 'em', floor(extract(epoch from p.em) * 1000))
               from public.portal_posicao p where p.owner = a.owner and p.os_id = a.id and p.em > now() - interval '12 hours') end,
-        'maquina', nullif(concat_ws(' ', m.data->>'tipo', m.data->>'marca', m.data->>'modelo'), ''), 'serie', m.data->'serie', 'ano', m.data->'ano'
+        'maquina', nullif(concat_ws(' ', m.data->>'tipo', m.data->>'marca', m.data->>'modelo'), ''), 'serie', m.data->'serie', 'ano', m.data->'ano',
+        'orcamento', case when jsonb_typeof(a.data#>'{orcamento,enviado}') = 'object' then jsonb_build_object(
+           'versao', a.data#>'{orcamento,enviado,em}', 'total', public.portal_num(a.data#>'{orcamento,enviado,total}'), 'obs', a.data#>'{orcamento,enviado,obs}',
+           'linhas', (select coalesce(jsonb_agg(jsonb_build_object('desc', l->'desc', 'qtd', public.portal_num(l->'qtd'), 'un', l->'un', 'valor', public.portal_num(l->'valor'))), '[]')
+                      from jsonb_array_elements(jsonb_path_query_array(a.data, '$.orcamento.enviado.linhas[*]')) l),
+           'resposta', (select jsonb_build_object('aprovado', r.data->'aprovado', 'em', r.data->'em', 'por', r.data->'por', 'motivo', r.data->'motivo')
+                          from public.docs r where r.owner = a.owner and r.col = 'respostas' and r.id = a.id and not r.deleted
+                           and public.portal_num(r.data->'versao') = public.portal_num(a.data#>'{orcamento,enviado,em}'))) end
       ) order by a.data->>'data' desc, a.data->'numero' desc nulls last), '[]')
       from public.docs a
       cross join lateral (select a.data->>'status' in ('concluido', 'faturado') fin) f
@@ -257,6 +265,31 @@ begin
   join public.docs c on c.owner = pa.owner and c.col = 'clientes' and c.id = pa.cliente_id and not c.deleted
   left join public.docs g on g.owner = c.owner and g.col = 'config' and g.id = 'geral'
   where pa.id = a);
+end $$;
+
+-- Portal: o cliente aprova ou recusa o orçamento que viu (p_versao = quando foi enviado).
+-- A resposta fica num documento separado ("respostas"), que o app lê e nunca sobrescreve.
+create or replace function public.portal_orcamento(p_token text, p_os text, p_versao numeric, p_aprovar boolean, p_motivo text default null) returns boolean
+language plpgsql volatile security definer set search_path = public as $$
+declare a uuid := public.portal_sessao_acesso(p_token); pa portal_acesso; o docs;
+begin
+  if a is null then return null; end if;
+  select * into pa from portal_acesso where id = a;
+  select * into o from docs where owner = pa.owner and col = 'atendimentos' and id = p_os and not deleted and data->>'clienteId' = pa.cliente_id;
+  if not found then raise exception 'OS não encontrada'; end if;
+  if jsonb_typeof(o.data#>'{orcamento,enviado}') is distinct from 'object'
+     or public.portal_num(o.data#>'{orcamento,enviado,em}') <> p_versao then
+    raise exception 'O orçamento mudou. Atualize a página.';
+  end if;
+  if exists (select 1 from docs where owner = pa.owner and col = 'respostas' and id = p_os and not deleted
+              and public.portal_num(data->'versao') = p_versao) then
+    raise exception 'Este orçamento já foi respondido.';
+  end if;
+  insert into docs (owner, col, id, data) values (pa.owner, 'respostas', p_os, jsonb_build_object(
+    'id', p_os, 'versao', p_versao, 'aprovado', p_aprovar, 'em', floor(extract(epoch from clock_timestamp()) * 1000),
+    'por', pa.login, 'motivo', nullif(left(trim(coalesce(p_motivo, '')), 500), '')))
+  on conflict (owner, col, id) do update set data = excluded.data, deleted = false;
+  return true;
 end $$;
 
 -- Fotos: o portal só consegue abrir as fotos (e a assinatura) das OS de clientes com login
@@ -286,11 +319,13 @@ revoke all on function public.portal_nova_senha(text, text) from public;
 revoke all on function public.portal_definir_acesso(text, text, text, uuid) from public;
 revoke all on function public.portal_remover_acesso(uuid) from public;
 revoke all on function public.portal_foto(text) from public;
+revoke all on function public.portal_orcamento(text, text, numeric, boolean, text) from public;
 grant execute on function public.portal_cliente(text) to anon, authenticated;
 grant execute on function public.portal_entrar(text, text) to anon, authenticated;
 grant execute on function public.portal_sair(text) to anon, authenticated;
 grant execute on function public.portal_nova_senha(text, text) to anon, authenticated;
 grant execute on function public.portal_foto(text) to anon, authenticated;
+grant execute on function public.portal_orcamento(text, text, numeric, boolean, text) to anon, authenticated;
 grant execute on function public.portal_definir_acesso(text, text, text, uuid) to authenticated;
 grant execute on function public.portal_remover_acesso(uuid) to authenticated;
 
