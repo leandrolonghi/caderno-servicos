@@ -1852,7 +1852,22 @@ $('#btnCsv').onclick = () => {
   });
   saveFile(`atendimentos-${today()}.csv`, '﻿' + [head.join(';'), ...rows].join('\r\n'));
 };
-$('#btnJson').onclick = () => saveFile(`caderno-servicos-${today()}.json`, JSON.stringify({ exportadoEm: new Date().toISOString(), config: cfg, clientes, maquinas, atendimentos: atend, faturas, gastos, aportes }, null, 2));
+const copiaCompleta = () => JSON.stringify({ exportadoEm: new Date().toISOString(), config: cfg, clientes, maquinas, atendimentos: atend, faturas, gastos, aportes }, null, 2);
+$('#btnJson').onclick = () => saveFile(`caderno-servicos-${today()}.json`, copiaCompleta());
+/* Cópia automática: uma vez por semana o app baixa a cópia completa no aparelho em uso.
+   Roda no primeiro toque (o navegador só deixa baixar depois de um toque) e a data fica
+   na conta, então só um aparelho baixa por semana. */
+const ultimaCopia = () => [cfg.ultimaCopia, LS.get('cs-ultima-copia', '')].filter(Boolean).sort().pop() || '';
+function copiaSemanal() {
+  if (!loaded.a || (!Object.keys(atend).length && !Object.keys(clientes).length)) return;
+  const lim = new Date(); lim.setDate(lim.getDate() - 7);
+  if (ultimaCopia() > lim.toISOString().slice(0, 10)) return;
+  saveFile(`controle-de-os-copia-${today()}.json`, copiaCompleta());
+  LS.set('cs-ultima-copia', today());
+  store.doc('config/geral').set({ ...cfg, ultimaCopia: today() });
+  toast('Cópia da semana salva no aparelho');
+}
+['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, copiaSemanal, { once: true, capture: true }));
 
 /* ---------- Ajustes ---------- */
 function renderMotivos() {
@@ -1977,7 +1992,7 @@ function renderCfg() {
   qt('categorias', cats().length + ' categorias');
   qt('motivos', motivos().length + ' motivos');
   qt('checklist', chkGrupos().length ? chkGrupos().length + (chkGrupos().length > 1 ? ' grupos' : ' grupo') : 'Nenhum grupo');
-  qt('backup', 'Planilha ou cópia completa');
+  qt('backup', ultimaCopia() ? 'Última cópia automática ' + fmtDate(ultimaCopia()) : 'Planilha ou cópia completa');
   const put = (sel, v) => { if (document.activeElement !== $(sel)) $(sel).value = v; };
   put('#cfgNome', cfg.nome || ''); put('#cfgCnpj', cfg.cnpj || ''); put('#cfgTel', cfg.telefone || ''); put('#cfgEmail', cfg.email || ''); put('#cfgEnd', cfg.endereco || ''); put('#cfgHora', cfg.valorHora || ''); put('#cfgKm', cfg.valorKm || '');
   $('#companyName').textContent = cfg.nome || 'Longhi Manutenções';
