@@ -2056,10 +2056,17 @@ nav.gnav .wrap{grid-template-columns:repeat(5,1fr)}
 .chartbox svg{width:100%;height:auto;display:block;overflow:visible}
 .chartbox .ax{fill:var(--muted);font:500 11px var(--body)}
 .chartbox .gl{stroke:var(--line);stroke-width:1}
-.chartbox .bar{fill:var(--accent)}
+.chartbox{--serie-fat:var(--accent);--serie-gas:#2A78D6}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .chartbox{--serie-fat:#D95926;--serie-gas:#3987E5}}
+:root[data-theme="dark"] .chartbox{--serie-fat:#D95926;--serie-gas:#3987E5}
+.chartbox .bar.fat,.clegend i.fat{fill:var(--serie-fat);background:var(--serie-fat)}
+.chartbox .bar.gas,.clegend i.gas{fill:var(--serie-gas);background:var(--serie-gas)}
 .chartbox .hit{fill:transparent;cursor:default}
-.chartbox .hit:hover + .bar,.chartbox .bar.on{opacity:.8}
-.ctip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font-size:13px;padding:6px 10px;border-radius:8px;white-space:nowrap;transform:translate(-50%,calc(-100% - 6px));font-variant-numeric:tabular-nums}
+.chartbox .hit:hover + g .bar{opacity:.8}
+.clegend{display:flex;gap:16px;font-size:13px;color:var(--muted);padding-left:4px}
+.clegend span{display:inline-flex;align-items:center;gap:6px}
+.clegend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.ctip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font-size:13px;padding:6px 10px;border-radius:8px;white-space:pre;transform:translate(-50%,calc(-100% - 6px));font-variant-numeric:tabular-nums}
 .tablebox{background:var(--surface);border-radius:14px;overflow-x:auto}
 .gtable{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
 .gtable th{font-size:12px;font-weight:600;color:var(--muted);text-align:left;padding:10px;border-bottom:1px solid var(--line);white-space:nowrap}
@@ -2188,7 +2195,7 @@ function renderPainel(body) {
       kpi('Gastos com o carro', brl(gCar), ''),
       kpi('Custo do carro por km', km ? brl(gCar / km) : '—', `cobra ${brl(n(D().cfg.valorKm))} por km`, km && gCar ? (gCar / km <= n(D().cfg.valorKm) ? 'good' : 'alert') : ''),
       ...kpisEmp(kpi)));
-  body.append(el('div', { class: 'gsec' }, el('h3', {}, 'Serviços realizados por mês'), monthChart()));
+  body.append(el('div', { class: 'gsec' }, el('h3', {}, 'Faturamento e gastos por mês'), monthChart()));
   const byCli = {};
   for (const a of os) { const k = a.clienteId; (byCli[k] = byCli[k] || { os: 0, h: 0, v: 0 }); byCli[k].os++; byCli[k].h += n(a.horas); byCli[k].v += calc(a).total; }
   const top = Object.entries(byCli).sort((x, y) => y[1].v - x[1].v).slice(0, 5);
@@ -2201,31 +2208,39 @@ function monthChart() {
   const keys = [];
   for (let i = 0; i < 12; i++) { keys.unshift(`${y}-${String(m).padStart(2, '0')}`); if (--m === 0) { m = 12; y--; } }
   const vals = keys.map(k => Object.values(D().atend).filter(a => done(a) && (a.data || '').startsWith(k)));
-  const tot = vals.map(l => l.reduce((s, a) => s + calc(a).total, 0));
-  const max = Math.max(...tot, 0);
+  const fat = vals.map(l => l.reduce((s, a) => s + calc(a).total, 0));
+  const gas = keys.map(k => Object.values(D().gastos || {}).filter(g => (g.data || '').startsWith(k)).reduce((s, g) => s + n(g.valor), 0));
+  const max = Math.max(...fat, ...gas, 0);
   const step = (() => { if (!max) return 1000; const raw = max / 3, p = 10 ** Math.floor(Math.log10(raw)); return [1, 2, 2.5, 5, 10].map(x => x * p).find(x => x >= raw); })();
   const top = Math.max(step, Math.ceil(max / step) * step);
-  const W = Math.max(300, Math.min(1080, ($('#gBody').clientWidth || 640) - 24)), H = 220, L = 52, R = 8, T = 12, B = 26, cw = (W - L - R) / 12, bw = Math.min(28, cw * 0.56);
+  const W = Math.max(300, Math.min(1080, ($('#gBody').clientWidth || 640) - 24)), H = 220, L = 52, R = 8, T = 12, B = 26, cw = (W - L - R) / 12, bw = Math.min(14, (cw * 0.72 - 2) / 2);
   const yv = v => T + (H - T - B) * (1 - v / top);
   const ns = 'http://www.w3.org/2000/svg';
   const sv = (tag, a = {}, txt) => { const e = document.createElementNS(ns, tag); for (const k in a) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; return e; };
-  const svg = sv('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Valor dos serviços realizados nos últimos 12 meses' });
+  const svg = sv('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Faturamento e gastos nos últimos 12 meses' });
   const short = v => v >= 1000 ? 'R$ ' + (v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil' : 'R$ ' + fmtN(v);
   for (let v = 0; v <= top + 1e-9; v += step) { svg.append(sv('line', { class: 'gl', x1: L, x2: W - R, y1: yv(v), y2: yv(v) }), sv('text', { class: 'ax', x: L - 6, y: yv(v) + 4, 'text-anchor': 'end' }, short(v))); }
+  // barra com o topo arredondado, apoiada na linha de base
+  const bar = (x, v, cls) => { const y0 = yv(v), h = H - B - y0; if (h <= 0) return null; const r = Math.min(4, bw / 2, h);
+    return sv('path', { class: 'bar ' + cls, d: `M${x},${H - B} V${y0 + r} Q${x},${y0} ${x + r},${y0} H${x + bw - r} Q${x + bw},${y0} ${x + bw},${y0 + r} V${H - B} Z` }); };
   const box = el('div', { class: 'chartbox' });
   const tip = el('div', { class: 'ctip', hidden: true });
   keys.forEach((k, i) => {
-    const cx = L + cw * i + cw / 2, h = (H - T - B) - (yv(tot[i]) - T), y0 = yv(tot[i]);
+    const cx = L + cw * i + cw / 2, y0 = yv(Math.max(fat[i], gas[i]));
     svg.append(sv('text', { class: 'ax', x: cx, y: H - 8, 'text-anchor': 'middle' }, ymTxt(k).split('/')[0]));
     const hit = sv('rect', { class: 'hit', x: L + cw * i, y: T, width: cw, height: H - T - B });
-    const r = Math.min(4, bw / 2, h);
-    const bar = h > 0 ? sv('path', { class: 'bar', d: `M${cx - bw / 2},${H - B} V${y0 + r} Q${cx - bw / 2},${y0} ${cx - bw / 2 + r},${y0} H${cx + bw / 2 - r} Q${cx + bw / 2},${y0} ${cx + bw / 2},${y0 + r} V${H - B} Z` }) : sv('g');
-    const show = () => { const bb = svg.getBoundingClientRect(), k2 = bb.width / W; tip.style.left = (12 + cx * k2) + 'px'; tip.style.top = (14 + y0 * k2) + 'px'; tip.textContent = `${ymTxt(k)} · ${brl(tot[i])} · ${vals[i].length} OS`; tip.hidden = false; };
+    const g = sv('g'); [bar(cx - bw - 1, fat[i], 'fat'), bar(cx + 1, gas[i], 'gas')].forEach(b => b && g.append(b));
+    const show = () => {
+      tip.textContent = `${ymTxt(k)}\nFaturamento ${brl(fat[i])}\nGastos ${brl(gas[i])}`; tip.hidden = false;
+      const sb = svg.getBoundingClientRect(), bb = box.getBoundingClientRect(), k2 = sb.width / W, half = tip.offsetWidth / 2;
+      tip.style.left = Math.min(Math.max(sb.left - bb.left + cx * k2, half + 4), bb.width - half - 4) + 'px'; tip.style.top = (sb.top - bb.top + y0 * k2) + 'px';
+    };
     hit.addEventListener('pointerenter', show); hit.addEventListener('pointerdown', show); hit.addEventListener('pointerleave', () => tip.hidden = true);
-    svg.append(hit, bar);
+    svg.append(hit, g);
   });
   svg.append(sv('line', { stroke: 'currentColor', 'stroke-opacity': '.35', x1: L, x2: W - R, y1: H - B, y2: H - B }));
-  box.append(svg, tip);
+  const item = (cls, txt) => el('span', {}, el('i', { class: cls }), txt);
+  box.append(el('div', { class: 'clegend' }, item('fat', 'Faturamento'), item('gas', 'Gastos')), svg, tip);
   return box;
 }
 function tableEl(head, rows, right = [], foot, onRow) {
