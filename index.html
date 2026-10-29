@@ -203,7 +203,6 @@ nav.tabs svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2
 .hist div span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;color:var(--muted)}
 .dayhead{font-family:var(--display);font-size:16px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-top:4px}
 .dayhead.late{color:var(--bad)}
-pre.copy{white-space:pre-wrap;font-family:var(--mono);font-size:13px;background:var(--bg);border-radius:8px;padding:10px;margin:0;user-select:all}
 @media (prefers-reduced-motion:no-preference){.card.tap{transition:transform .08s}.card.tap:active{transform:scale(.99)}}
 
 /* ===== Visual minimalista: menos caixas, bordas e cor; hierarquia por espaço e peso ===== */
@@ -454,7 +453,6 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
           <label class="f" for="sHorimetro">Horímetro da máquina<input id="sHorimetro" type="number" inputmode="decimal" step="0.1" min="0"></label>
         </div>
         <div class="idphotos" id="idPhotos"></div>
-        <div class="row" id="portalRow" hidden><button type="button" id="btnPortal">Link para o cliente acompanhar</button></div>
       </fieldset>
       <fieldset data-tab="tempo"><legend>Apontamentos</legend>
         <div class="aplist" id="apList"></div>
@@ -497,8 +495,7 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
         <div id="sigBox"></div>
       </fieldset>
       <fieldset id="reportBox" data-tab="fechar" hidden><legend>Enviar para o cliente</legend>
-        <div class="row"><button type="button" class="primary" id="btnPdf">Gerar PDF da OS</button><button type="button" id="btnMail">Enviar por e-mail</button><button type="button" id="btnReport">Copiar resumo em texto</button></div>
-        <pre class="copy" id="reportPre" hidden></pre>
+        <div class="row"><button type="button" class="primary" id="btnPdf">Gerar PDF da OS</button><button type="button" id="btnMail">Enviar por e-mail</button></div>
       </fieldset>
       <div class="row" id="delRow" data-tab="fechar" hidden><button type="button" class="danger" id="btnDelSvc">Excluir atendimento</button></div>
     </div>
@@ -947,7 +944,7 @@ function openSvc(id, preset = {}) {
   parts = (a.pecas || []).map(p => ({ ...p })); photos = [...(a.fotos || [])]; fotosProb = [...(a.fotosProblema || [])]; testes = (a.testes || []).map(x => ({ desc: x.desc || '', fotos: [...(x.fotos || [])] }));
   renderParts(); renderPhotos(); renderTestes(); renderTotals(); renderApont(); renderChk(); renderSig(); renderHist(); renderIdPhotos();
   clearInterval(tick); tick = setInterval(() => { if ($('#svcSheet').hidden) clearInterval(tick); else if (apont.some(x => !x.fim)) renderApont(true); }, 1000);
-  $('#reportBox').hidden = !id; $('#portalRow').hidden = !id; $('#reportPre').hidden = true;
+  $('#reportBox').hidden = !id;
   $('#delRow').hidden = !id; $('#btnDelSvc').dataset.armed = ''; $('#btnDelSvc').textContent = 'Excluir atendimento';
   showSubTab('problema');
   $('#svcSheet').hidden = false; showOsTab(id && isRunning(a) ? 'tempo' : 'geral');
@@ -1495,7 +1492,7 @@ async function saveSvc(close, silent) {
   try {
     await store.doc('atendimentos/' + id).set(data);
     editingSvc = id; $('#svcTitle').textContent = osLabel(data);
-    $('#reportBox').hidden = false; $('#portalRow').hidden = false; $('#delRow').hidden = false;
+    $('#reportBox').hidden = false; $('#delRow').hidden = false;
     if (close) { $('#svcSheet').hidden = true; toast(osLabel(data) + ' salva'); }
     return data;
   } catch (err) { toast('Não foi possível salvar: ' + (err.message || err.code)); }
@@ -1547,43 +1544,6 @@ $('#fab').onclick = () => {
           svcAuto.kick(); await svcAuto.flush();
         } }, 'Criar OS'))));
   document.body.append(ov); requestAnimationFrame(() => busca.focus());
-};
-
-/* ---------- Relatório ---------- */
-function reportText(a) {
-  const c = clientes[a.clienteId] || {}, m = maquinas[a.maquinaId], t = calc(a), L = [];
-  L.push(`*${cfg.nome || 'Relatório de atendimento'}*`);
-  const contato = [cfg.cnpj && `CNPJ ${cfg.cnpj}`, cfg.telefone, cfg.email].filter(Boolean).join(' · '); if (contato) L.push(contato);
-  if (a.numero) L.push(`*${osLabel(a)}*`);
-  L.push(`Cliente: ${c.nome || ''}`);
-  if (c.fazenda) L.push(`Fazenda: ${c.fazenda}`);
-  L.push(`Data: ${fmtDate(a.data)}${a.inicio && a.fim ? ` (${a.inicio} às ${a.fim})` : ''}`);
-  L.push(`Serviço: ${tipoTxt(a.tipo)} · ${STATUS[a.status] || a.status}`);
-  if (m) L.push(`Máquina: ${`${m.tipo} ${m.marca} ${m.modelo}`.trim()}${m.serie ? ` (série ${m.serie})` : ''}`);
-  if (a.horimetro) L.push(`Horímetro: ${a.horimetro} h`);
-  if (a.problema) L.push('', '*Falha*', a.problema);
-  if (a.causa) L.push('', '*Causa*', a.causa);
-  if (a.descricao) L.push('', '*Solução*', a.descricao);
-  if ((a.testes || []).length) { L.push('', '*Testes realizados*'); a.testes.forEach((x, i) => L.push(`${i + 1}. ${x.desc}${x.fotos?.length ? ` (${x.fotos.length} foto${x.fotos.length > 1 ? 's' : ''})` : ''}`)); }
-  if ((a.pecas || []).length) { L.push('', '*Materiais de consumo*'); for (const p of a.pecas) L.push(`• ${p.desc} (${p.qtd}× ${brl(p.valor)}) = ${brl(n(p.qtd) * n(p.valor))}`); }
-  const ck = (a.checklist || []).filter(x => x.estado && x.estado !== 'na');
-  if (ck.length) { L.push('', '*Checklist*'); for (const x of ck) L.push(`${EST_TXT[x.estado]} – ${x.item}${x.obs ? `: ${x.obs}` : ''}${x.fotos?.length ? ` (${x.fotos.length} foto${x.fotos.length > 1 ? 's' : ''})` : ''}`); }
-  if (a.recomendacao) L.push('', '*Cuidados*', a.recomendacao);
-  const apAll = a.apontamentos || [], tr = apAll.filter(x => x.tipo === 'trabalho' && x.fim).sort((p, q) => p.ini - q.ini);
-  if (tr.length) { L.push('', '*Horário de atendimento*'); for (const x of tr) { const pz = pausaApos(apAll, x); L.push(`• ${fmtDate(dayOf(x.ini))} ${hhmm(x.ini)}–${hhmm(x.fim)} (${dur(x.fim - x.ini)})${pz ? ` · pausado: ${pz.motivo || 'sem motivo'}` : ''}`); } }
-  L.push('', `Mão de obra: ${fmtH(a.horas)} = ${brl(t.mo)}`);
-  if (n(a.km)) L.push(`Deslocamento: ${n(a.km)} km = ${brl(t.desl)}`);
-  if (t.pecas) L.push(`Materiais de consumo: ${brl(t.pecas)}`);
-  L.push(`*Total: ${brl(t.total)}*`);
-  if (a.assinatura) L.push('', `Serviço conferido e assinado por ${a.assinatura.nome} em ${new Date(a.assinatura.em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}.`);
-  return L.join('\n');
-}
-$('#btnReport').onclick = async () => {
-  const a = await saveSvc(false); if (!a) return;
-  const txt = reportText(a), pre = $('#reportPre');
-  pre.textContent = txt; pre.hidden = false;
-  try { await navigator.clipboard.writeText(txt); toast('Relatório copiado. Cole no WhatsApp.'); }
-  catch { const r = document.createRange(); r.selectNodeContents(pre); const sl = getSelection(); sl.removeAllRanges(); sl.addRange(r); toast('Texto selecionado. Toque em Copiar.'); }
 };
 
 /* ---------- Portal do cliente ----------
@@ -1650,10 +1610,6 @@ async function loginDlg(cid, atual) {
   document.body.append(ov); requestAnimationFrame(() => (atual ? senha : email).focus());
 }
 $('#btnPortalCli').onclick = () => loginDlg(editingCli);
-$('#btnPortal').onclick = async () => {
-  const a = await saveSvc(false); if (!a) return;
-  shareTxt(osLabel(a), `Acompanhe a ${osLabel(a)}${cfg.nome ? ' da ' + cfg.nome : ''} (entre com seu e-mail e senha):\n${portalUrl(a.id)}`);
-};
 
 /* ---------- PDF da OS ---------- */
 async function imgData(id, maxDim = 1200) {
