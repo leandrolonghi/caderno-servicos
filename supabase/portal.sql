@@ -10,6 +10,7 @@
 -- posição que o app enviou.
 -- O checklist de inspeção aparece com a situação, a observação, a foto de referência e as fotos de cada ponto.
 -- Quando você envia um orçamento pelo app, o cliente aprova ou recusa no portal; a resposta volta para o app.
+-- As faturas em aberto mostram o QR code e o Pix copia e cola com o valor (chave em Gestão › Faturas › Dados de pagamento).
 -- As senhas ficam guardadas embaralhadas (bcrypt): nem você consegue ler depois.
 -- A senha que você cria é provisória: no primeiro acesso o cliente cria a senha dele.
 -- A sessão termina ao fechar a aba do portal (e vence sozinha depois de 30 minutos sem uso).
@@ -209,6 +210,8 @@ begin
     'cliente', c.data->'nome', 'fazenda', c.data->'fazenda', 'documento', public.portal_doc(c.data->>'documento'), 'local', c.data->'local',
     'empresa', g.data->'nome', 'telefone', g.data->'telefone',
     'cnpj', g.data->'cnpj', 'email', g.data->'email', 'endereco', g.data->'endereco',
+    'pix', case when coalesce(g.data#>>'{fiscal,pix}', '') <> '' then jsonb_build_object(
+      'chave', g.data#>'{fiscal,pix}', 'tipo', g.data#>'{fiscal,pixTipo}', 'cidade', g.data#>'{fiscal,cidade}') end,
     'pasta', c.owner, 'trocarSenha', pa.trocar,
     'faturas', (select coalesce(jsonb_agg(jsonb_build_object(
         'id', f.id, 'numero', f.data->'numero', 'emissao', f.data->'emissao', 'vencimento', f.data->'vencimento',
