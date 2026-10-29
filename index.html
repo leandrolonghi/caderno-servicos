@@ -98,6 +98,8 @@ legend{font-family:var(--display);font-size:16px;text-transform:uppercase;letter
 .mov button{min-height:36px;min-width:36px;padding:0}
 .toast:has(.toastbtn){display:flex;align-items:center;white-space:nowrap}
 .toast[hidden]{display:none}
+.orcst{font-weight:600}
+.orcst.warn{color:var(--warn)}.orcst.ok{color:var(--ok)}.orcst.bad{color:var(--bad)}
 .toastbtn{background:none;border:0;color:inherit;font:inherit;font-weight:700;text-decoration:underline;padding:0 0 0 14px;min-height:0;cursor:pointer}
 .lix{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center}
 .lix > div{display:flex;flex-direction:column;gap:2px;min-width:0}
@@ -479,6 +481,9 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
         </div>
         <div class="idphotos" id="idPhotos"></div>
       </fieldset>
+      <fieldset data-tab="geral"><legend>Orçamento</legend>
+        <div id="orcBody" style="display:flex;flex-direction:column;gap:10px"></div>
+      </fieldset>
       <fieldset data-tab="tempo"><legend>Apontamentos</legend>
         <div class="aplist" id="apList"></div>
         <div class="apdock"><div class="apdock-in"><div id="pickBox"></div><div class="timerbar" id="timerBar"></div></div></div>
@@ -667,7 +672,7 @@ const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 };
-const COLS = { clientes: 'c', maquinas: 'm', atendimentos: 'a', faturas: 'f', gastos: 'g', aportes: 'p', materiais: 'mt', estoque: 'e', lixeira: 'lx' };
+const COLS = { clientes: 'c', maquinas: 'm', atendimentos: 'a', faturas: 'f', gastos: 'g', aportes: 'p', materiais: 'mt', estoque: 'e', lixeira: 'lx', respostas: 'r' };
 let server = LS.get('cs-cache', null) || { clientes: {}, maquinas: {}, atendimentos: {}, config: null };
 if (!server.faturas) server.faturas = {};
 if (!server.gastos) server.gastos = {};
@@ -675,7 +680,8 @@ if (!server.aportes) server.aportes = {};
 if (!server.materiais) server.materiais = {};
 if (!server.estoque) server.estoque = {};
 if (!server.lixeira) server.lixeira = {};
-let faturas = {}, gastos = {}, aportes = {}, materiais = {}, estoque = {}, lixeira = {};
+if (!server.respostas) server.respostas = {};
+let faturas = {}, gastos = {}, aportes = {}, materiais = {}, estoque = {}, lixeira = {}, respostas = {};
 let outbox = LS.get('cs-outbox', []);
 let syncing = false, lastSyncOk = true;
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej({ code: 'timeout' }), ms))]);
@@ -690,9 +696,9 @@ function applyOp(state, op) {
   else m[id] = { ...op.data, id };
 }
 function recompute() {
-  const st = { clientes: { ...server.clientes }, maquinas: { ...server.maquinas }, atendimentos: { ...server.atendimentos }, faturas: { ...server.faturas }, gastos: { ...server.gastos }, aportes: { ...server.aportes }, materiais: { ...server.materiais }, estoque: { ...server.estoque }, lixeira: { ...server.lixeira }, config: server.config };
+  const st = { clientes: { ...server.clientes }, maquinas: { ...server.maquinas }, atendimentos: { ...server.atendimentos }, faturas: { ...server.faturas }, gastos: { ...server.gastos }, aportes: { ...server.aportes }, materiais: { ...server.materiais }, estoque: { ...server.estoque }, lixeira: { ...server.lixeira }, respostas: { ...server.respostas }, config: server.config };
   for (const op of outbox) applyOp(st, op);
-  clientes = st.clientes; maquinas = st.maquinas; atend = st.atendimentos; faturas = st.faturas; gastos = st.gastos; aportes = st.aportes; materiais = st.materiais; estoque = st.estoque; lixeira = st.lixeira;
+  clientes = st.clientes; maquinas = st.maquinas; atend = st.atendimentos; faturas = st.faturas; gastos = st.gastos; aportes = st.aportes; materiais = st.materiais; estoque = st.estoque; lixeira = st.lixeira; respostas = st.respostas;
   const nc = { valorHora: 0, valorKm: 0, nome: '', pagamento: '', ...(st.config || {}) };
   if (JSON.stringify(nc) !== JSON.stringify(cfg) || !recompute.done) { cfg = nc; renderCfg(); recompute.done = true; }
   rerender(); renderSync();
@@ -906,6 +912,7 @@ function svcCard(a, busca) {
         el('span', { class: 'num' }, fmtH(a.horas)),
         n(a.km) > 0 && el('span', { class: 'num' }, `${n(a.km)} km`),
         (a.fotos || []).length > 0 && el('span', {}, `${a.fotos.length} foto(s)`)),
+      !['concluido', 'faturado'].includes(a.status) && (s => s && el('div', { class: 'small orcst ' + s[1] }, s[0]))(orcSit(a.id, a.orcamento)),
       isRunning(a) && el('div', { class: 'small live' }, (r => r.tipo === 'trabalho' ? 'Em atendimento agora' : r.tipo === 'pausa' ? `Pausado: ${r.motivo || ''}` : 'Em deslocamento agora')(a.apontamentos.find(x => !x.fim))),
       busca ? [a.problema && el('div', { class: 'small' }, el('b', {}, 'Falha: '), a.problema), a.causa && el('div', { class: 'small' }, el('b', {}, 'Causa: '), a.causa), a.descricao && el('div', { class: 'small' }, el('b', {}, 'Solução: '), a.descricao)]
         : (a.problema || a.descricao) && el('div', { class: 'small muted', style: 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }, a.problema || a.descricao));
@@ -1025,7 +1032,8 @@ function openSvc(id, preset = {}) {
   $('#sDesc').value = a.descricao || ''; $('#sObsCli').value = a.recomendacao || '';
   $('#sProblema').value = a.problema || ''; $('#sCausa').value = a.causa || '';
   parts = (a.pecas || []).map(p => ({ ...p })); photos = [...(a.fotos || [])]; fotosProb = [...(a.fotosProblema || [])]; testes = (a.testes || []).map(x => ({ desc: x.desc || '', fotos: [...(x.fotos || [])] }));
-  renderParts(); renderPhotos(); renderTestes(); renderTotals(); renderApont(); renderChk(); renderSig(); renderHist(); renderIdPhotos();
+  orc = a.orcamento ? JSON.parse(JSON.stringify(a.orcamento)) : null;
+  renderParts(); renderOrc(); renderPhotos(); renderTestes(); renderTotals(); renderApont(); renderChk(); renderSig(); renderHist(); renderIdPhotos();
   clearInterval(tick); tick = setInterval(() => { if ($('#svcSheet').hidden) clearInterval(tick); else if (apont.some(x => !x.fim)) renderApont(true); }, 1000);
   $('#reportBox').hidden = !id;
   $('#delRow').hidden = !id; $('#btnDelSvc').dataset.armed = ''; $('#btnDelSvc').textContent = 'Excluir atendimento';
@@ -1498,6 +1506,102 @@ function ligarMat(p, valor) {
   p.materialId = m.id; p.custo = n(m.custo);
   if (!n(p.valor) && n(m.preco)) { p.valor = n(m.preco); valor.value = p.valor; }
 }
+/* ---------- Orçamento ----------
+   Antes de começar: horas e km previstos (pelos valores de Ajustes) e itens. Ao enviar, o orçamento
+   fica fechado e vai para o portal, onde o cliente aprova ou recusa. A resposta chega na coleção
+   "respostas" (escrita só pelo portal), então salvar a OS nunca apaga a resposta do cliente. */
+let orc = null;
+const dataHora = ts => new Date(ts).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+function orcLinhas(o) {
+  const l = [];
+  if (n(o.horas) > 0) l.push({ desc: 'Mão de obra', qtd: n(o.horas), un: 'h', valor: n(cfg.valorHora) });
+  if (n(o.km) > 0) l.push({ desc: 'Deslocamento', qtd: n(o.km), un: 'km', valor: n(cfg.valorKm) });
+  for (const p of o.itens || []) if ((p.desc || '').trim() || n(p.valor)) l.push({ desc: (p.desc || '').trim(), qtd: n(p.qtd), valor: n(p.valor) });
+  return l;
+}
+const orcTotal = l => l.reduce((s, x) => s + n(x.qtd) * n(x.valor), 0);
+const linhaTxt = x => x.un ? `${x.desc} · ${fmtQ(x.qtd)} ${x.un}` : `${x.desc}${n(x.qtd) !== 1 ? ` · ${fmtQ(x.qtd)} × ${brl(x.valor)}` : ''}`;
+// resposta do cliente vale só para a versão enviada (alterar e enviar de novo pede outra aprovação)
+const respostaDe = (id, o) => { const r = respostas[id]; return o?.enviado && r && n(r.versao) === n(o.enviado.em) ? r : null; };
+function orcSit(id, o) {
+  if (!o?.enviado) return null;
+  const r = respostaDe(id, o);
+  return !r ? ['Orçamento aguardando o cliente', 'warn'] : r.aprovado ? ['Orçamento aprovado', 'ok'] : ['Orçamento recusado', 'bad'];
+}
+function renderOrc() {
+  const box = $('#orcBody'); if (!box) return;
+  if (!orc) { box.replaceChildren(el('div', {}, el('button', { type: 'button', onclick: () => { orc = { horas: '', km: '', itens: [], obs: '' }; renderOrc(); svcAuto.kick(); } }, '+ Orçamento'))); return; }
+  const env = orc.enviado;
+  if (env) {
+    const r = respostaDe(editingSvc, orc), [txt, cls] = orcSit(editingSvc, orc);
+    box.replaceChildren(...[
+      el('div', { class: 'orcst ' + cls }, r ? `${txt}${r.por ? ' por ' + r.por : ''} em ${dataHora(r.em)}` : txt),
+      r && !r.aprovado && r.motivo && el('div', { class: 'small' }, 'Motivo: ' + r.motivo),
+      el('div', { class: 'totals num' }, env.linhas.map(x => el('div', {}, el('span', {}, linhaTxt(x)), el('span', {}, brl(n(x.qtd) * n(x.valor))))),
+        el('div', { class: 'grand' }, el('span', {}, 'Total'), el('span', {}, brl(env.total)))),
+      env.obs && el('p', { class: 'small muted', style: 'margin:0;white-space:pre-wrap' }, env.obs),
+      el('div', { class: 'small muted' }, 'Enviado em ' + dataHora(env.em)),
+      el('div', { class: 'row' },
+        !r && el('button', { type: 'button', onclick: () => enviarOrc(true) }, 'Enviar de novo'),
+        el('button', { type: 'button', onclick: () => {
+          if (r?.aprovado && !confirm('O cliente já aprovou este orçamento. Se alterar, ele precisa aprovar de novo. Alterar?')) return;
+          delete orc.enviado; renderOrc(); svcAuto.kick();
+        } }, 'Alterar'))].filter(Boolean));
+    return;
+  }
+  const total = el('div', { class: 'totals num' });
+  const somar = () => total.replaceChildren(...orcLinhas(orc).map(x => el('div', {}, el('span', {}, linhaTxt(x)), el('span', {}, brl(n(x.qtd) * n(x.valor))))),
+    el('div', { class: 'grand' }, el('span', {}, 'Total'), el('span', {}, brl(orcTotal(orcLinhas(orc))))));
+  const num = (id, key, rot) => el('label', { class: 'f', for: id }, rot, el('input', { id, type: 'number', inputmode: 'decimal', step: 'any', min: '0', value: orc[key] ?? '', oninput: e => { orc[key] = e.target.value; somar(); } }));
+  const itens = el('div', { class: 'parts' }, (orc.itens || []).map((p, i) => {
+    const valor = el('input', { id: `o_v_${i}`, type: 'number', inputmode: 'decimal', step: '0.01', min: '0', value: p.valor ?? '', oninput: e => { p.valor = n(e.target.value); somar(); } });
+    return el('div', { class: 'part' },
+      el('label', { class: 'f', for: `o_d_${i}` }, 'Item', el('input', { id: `o_d_${i}`, list: 'matList', autocomplete: 'off', value: p.desc || '', oninput: e => {
+        p.desc = e.target.value; const m = matPorNome(p.desc);
+        if (m) { p.desc = m.nome; if (!n(p.valor) && n(m.preco)) { p.valor = n(m.preco); valor.value = p.valor; } }
+        somar();
+      } })),
+      el('label', { class: 'f', for: `o_q_${i}` }, 'Qtd', el('input', { id: `o_q_${i}`, type: 'number', inputmode: 'decimal', step: 'any', min: '0', value: p.qtd ?? 1, oninput: e => { p.qtd = n(e.target.value); somar(); } })),
+      el('label', { class: 'f', for: `o_v_${i}` }, 'Valor un.', valor),
+      el('button', { type: 'button', class: 'danger', 'aria-label': 'Remover item', onclick: () => { orc.itens.splice(i, 1); renderOrc(); svcAuto.kick(); } }, '×'));
+  }));
+  box.replaceChildren(
+    el('div', { class: 'grid2' }, num('oHoras', 'horas', 'Horas previstas'), num('oKm', 'km', 'Km previstos')),
+    itens,
+    el('div', {}, el('button', { type: 'button', onclick: () => { (orc.itens = orc.itens || []).push({ desc: '', qtd: 1, valor: 0 }); renderOrc(); $(`#o_d_${orc.itens.length - 1}`).focus(); } }, '+ Item')),
+    el('label', { class: 'f', for: 'oObs' }, 'Observação', el('textarea', { id: 'oObs', rows: 2, oninput: e => { orc.obs = e.target.value; } }, orc.obs || '')),
+    total,
+    el('div', { class: 'row' },
+      el('button', { type: 'button', class: 'primary', onclick: () => enviarOrc(false) }, 'Enviar para aprovação'),
+      el('button', { type: 'button', class: 'ghost', onclick: () => { if (!orcLinhas(orc).length || confirm('Apagar este orçamento?')) { orc = null; renderOrc(); svcAuto.kick(); } } }, 'Apagar orçamento')));
+  somar();
+}
+async function enviarOrc(deNovo) {
+  if (!deNovo) {
+    const linhas = orcLinhas(orc);
+    if (!linhas.length) return toast('Coloque horas, km ou itens no orçamento');
+    orc.enviado = { em: Date.now(), linhas, total: Math.round(orcTotal(linhas) * 100) / 100, obs: (orc.obs || '').trim() };
+  }
+  svcAuto.cancel();
+  const a = await saveSvc(false, true);
+  if (!a) { if (!deNovo) delete orc.enviado; return toast('Escolha o cliente antes de enviar'); }
+  renderOrc(); $('#svcSaved').textContent = '✓ Salvo';
+  const c = clientes[a.clienteId], m = maquinas[a.maquinaId], mq = m ? `${m.tipo || ''} ${m.marca || ''} ${m.modelo || ''}`.replace(/\s+/g, ' ').trim() : '';
+  try { if (c) Nuvem.acessos(c.id).then(l => { if (Array.isArray(l) && !l.length) toast('Esse cliente ainda não tem login no portal. Crie em Clientes e máquinas.'); }).catch(() => {}); } catch {}
+  await shareTxt('Orçamento ' + osLabel(a), `Olá${c?.nome ? ', ' + c.nome : ''}.\n\nO orçamento da ${osLabel(a)}${mq ? ' (' + mq + ')' : ''} ficou em ${brl(a.orcamento.enviado.total)}.\nVeja os detalhes e aprove pelo portal: ${portalUrl(a.id)}`);
+}
+// aviso quando o cliente responde pelo portal
+function avisarRespostas() {
+  const visto = LS.get('cs-resp-visto', 0);
+  if (!visto) return LS.set('cs-resp-visto', Date.now());
+  const novas = Object.values(respostas).filter(r => n(r.em) > visto).sort((x, y) => n(x.em) - n(y.em));
+  if (!novas.length) return;
+  LS.set('cs-resp-visto', n(novas[novas.length - 1].em));
+  const r = novas[novas.length - 1], a = atend[r.id];
+  toast(`${r.aprovado ? 'Cliente aprovou o orçamento' : 'Cliente recusou o orçamento'}${a ? ' da ' + osLabel(a) : ''}`);
+  if (!$('#svcSheet').hidden && editingSvc === r.id && orc?.enviado) renderOrc();
+}
+
 $('#btnAddPart').onclick = () => { parts.push({ desc: '', qtd: 1, valor: 0 }); renderParts(); renderTotals(); $(`#p_d_${parts.length - 1}`).focus(); };
 
 function camIco() { const t = document.createElement('template'); t.innerHTML = '<svg viewBox="0 0 24 24" class="camico"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>'; return t.content.firstChild; }
@@ -1595,7 +1699,7 @@ async function saveSvc(close, silent) {
     testes: testes.filter(x => x.desc.trim() || x.fotos.length).map(x => ({ desc: x.desc.trim(), fotos: x.fotos })),
     descricao: $('#sDesc').value.trim(), recomendacao: $('#sObsCli').value.trim(),
     pecas: parts.filter(p => (p.desc || '').trim() || n(p.valor)).map(p => ({ desc: (p.desc || '').trim(), qtd: n(p.qtd), valor: n(p.valor), ...(p.materialId && { materialId: p.materialId, custo: n(p.custo) }) })),
-    fotos: photos, fotoHorimetro: idFotos.fotoHorimetro, fotoChassi: idFotos.fotoChassi, apontamentos: apont, checklist: chk.map(x => ({ grupo: x.grupo || '', item: x.item, ref: chkRef(x), estado: x.estado || '', obs: (x.obs || '').trim(), fotos: x.fotos || [] })), assinatura: sig, atualizadoEm: Date.now() };
+    fotos: photos, fotoHorimetro: idFotos.fotoHorimetro, fotoChassi: idFotos.fotoChassi, apontamentos: apont, checklist: chk.map(x => ({ grupo: x.grupo || '', item: x.item, ref: chkRef(x), estado: x.estado || '', obs: (x.obs || '').trim(), fotos: x.fotos || [] })), assinatura: sig, orcamento: orc ? { horas: n(orc.horas) || '', km: n(orc.km) || '', itens: (orc.itens || []).filter(p => (p.desc || '').trim() || n(p.valor)).map(p => ({ desc: (p.desc || '').trim(), qtd: n(p.qtd), valor: n(p.valor) })), obs: (orc.obs || '').trim(), ...(orc.enviado && { enviado: orc.enviado }) } : null, atualizadoEm: Date.now() };
   if (!prev.criadoEm) data.criadoEm = Date.now();
   if (!prev.numero) data.numero = Math.max(0, ...Object.values(atend).map(a => a.numero || 0)) + 1;
   if (data.status === 'faturado' && !prev.faturadoEm) data.faturadoEm = Date.now();
@@ -2290,7 +2394,7 @@ function renderLixeira() {
 window.CS = { $, el, brl, n, fmtDate, today, newId, store, calc, saveFile, toast, tipoTxt, tipos, cliLabel, osLabel, maskDoc, STATUS, uploadImg, shrink, imgOf, pickers, renderSync, openSvc,
   saldos, acabando, matQ,
   get data() { return { clientes, maquinas, atend, faturas, gastos, aportes, materiais, estoque, cfg }; } };
-function rerender() { renderAtend(); renderClients(); renderMatCfg(); renderEstBanner(); renderLixeira(); $('#ajSum-clientes').textContent = Object.keys(clientes).length + ' cliente(s)'; }
+function rerender() { renderAtend(); renderClients(); renderMatCfg(); renderEstBanner(); renderLixeira(); avisarRespostas(); $('#ajSum-clientes').textContent = Object.keys(clientes).length + ' cliente(s)'; }
 
 /* ---------- Conexão com o armazenamento ---------- */
 if (LS.get('cs-cache', null)) { loaded = { c: true, m: true, a: true }; }
