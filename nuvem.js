@@ -149,7 +149,6 @@ if (sb) {
 const msg = e => {
   const m = String(e?.message || e || '');
   if (/invalid login/i.test(m)) return 'E-mail ou senha incorretos';
-  if (/already registered/i.test(m)) return 'Esse e-mail já tem conta. Use Entrar.';
   if (/email not confirmed/i.test(m)) return 'Confirme o e-mail pelo link que chegou na sua caixa de entrada';
   if (/password/i.test(m)) return 'A senha precisa ter pelo menos 6 caracteres';
   if (/fetch|network/i.test(m)) return 'Sem conexão. Tente de novo quando tiver sinal.';
@@ -165,7 +164,6 @@ window.Nuvem = {
   pull: () => pull(),
   onAuth: fn => authFns.push(fn),
   async signIn(email, password) { const { data, error } = await sb.auth.signInWithPassword({ email, password }); if (error) throw msg(error); setUser(data.user); },
-  async signUp(email, password) { const { data, error } = await sb.auth.signUp({ email, password }); if (error) throw msg(error); if (!data.session) throw 'Conta criada. Abra o link de confirmação que chegou no seu e-mail e depois toque em Entrar.'; setUser(data.user); },
   async signOut() { try { await sb.auth.signOut(); } catch {} setUser(null); },
   /* acesso do cliente ao portal (precisa de internet) */
   async acessos(clienteId) {
