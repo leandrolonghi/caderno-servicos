@@ -10,6 +10,7 @@
 -- posição que o app enviou.
 -- O checklist de inspeção aparece com a situação, a observação, a foto de referência e as fotos de cada ponto.
 -- Quando você envia um orçamento pelo app, o cliente aprova ou recusa no portal; a resposta volta para o app.
+-- O cliente que não estava no local assina a OS finalizada pelo portal; a assinatura aparece no app e no PDF.
 -- As faturas em aberto mostram o QR code e o Pix copia e cola com o valor (chave em Gestão › Faturas › Dados de pagamento).
 -- As senhas ficam guardadas embaralhadas (bcrypt): nem você consegue ler depois.
 -- A senha que você cria é provisória: no primeiro acesso o cliente cria a senha dele.
@@ -245,8 +246,9 @@ begin
         'valores', case when fin then public.portal_valores(a.data, coalesce(g.data, '{}')) end,
         'total', case when fin then public.portal_total(a.data, coalesce(g.data, '{}')) end,
         'assinatura', case when jsonb_typeof(a.data->'assinatura') = 'object' then jsonb_build_object(
-           'id', a.data#>'{assinatura,id}', 'nome', a.data#>'{assinatura,nome}', 'em', a.data#>'{assinatura,em}') end,
-        'assinadoEm', a.data#>'{assinatura,em}',
+           'id', a.data#>'{assinatura,id}', 'nome', a.data#>'{assinatura,nome}', 'em', a.data#>'{assinatura,em}')
+           when s.id is not null then jsonb_build_object('img', s.data->'img', 'nome', s.data->'nome', 'em', s.data->'em', 'total', s.data->'total') end,
+        'assinadoEm', coalesce(a.data#>'{assinatura,em}', s.data->'em'),
         'posicao', case when a.data->>'status' in ('deslocamento', 'aguardando', 'andamento') then
            (select jsonb_build_object('lat', p.lat, 'lng', p.lng, 'precisao', p.precisao, 'em', floor(extract(epoch from p.em) * 1000))
               from public.portal_posicao p where p.owner = a.owner and p.os_id = a.id and p.em > now() - interval '12 hours') end,
@@ -262,6 +264,7 @@ begin
       from public.docs a
       cross join lateral (select a.data->>'status' in ('concluido', 'faturado') fin) f
       left join public.docs m on m.owner = a.owner and m.col = 'maquinas' and m.id = a.data->>'maquinaId' and not m.deleted
+      left join public.docs s on s.owner = a.owner and s.col = 'assinaturas' and s.id = a.id and not s.deleted
       where a.owner = c.owner and a.col = 'atendimentos' and not a.deleted and a.data->>'clienteId' = c.id)
   )
   from public.portal_acesso pa
@@ -295,6 +298,31 @@ begin
   return true;
 end $$;
 
+-- Portal: o cliente assina a OS finalizada quando não estava no local (p_img = PNG em data URL).
+-- A assinatura fica num documento separado ("assinaturas"), que o app lê e nunca sobrescreve.
+create or replace function public.portal_assinar(p_token text, p_os text, p_nome text, p_img text) returns boolean
+language plpgsql volatile security definer set search_path = public as $$
+declare a uuid := public.portal_sessao_acesso(p_token); pa portal_acesso; o docs; cfg jsonb;
+begin
+  if a is null then return null; end if;
+  select * into pa from portal_acesso where id = a;
+  select * into o from docs where owner = pa.owner and col = 'atendimentos' and id = p_os and not deleted and data->>'clienteId' = pa.cliente_id;
+  if not found then raise exception 'OS não encontrada'; end if;
+  if coalesce(o.data->>'status', '') not in ('concluido', 'faturado') then raise exception 'A OS ainda não foi finalizada.'; end if;
+  if jsonb_typeof(o.data->'assinatura') = 'object'
+     or exists (select 1 from docs where owner = pa.owner and col = 'assinaturas' and id = p_os and not deleted) then
+    raise exception 'Esta OS já foi assinada.';
+  end if;
+  if length(trim(coalesce(p_nome, ''))) < 2 then raise exception 'Escreva o seu nome.'; end if;
+  if coalesce(length(p_img), 0) > 300000 or p_img !~ '^data:image/png;base64,[A-Za-z0-9+/]+=*$' then raise exception 'Assinatura inválida.'; end if;
+  select data into cfg from docs where owner = pa.owner and col = 'config' and id = 'geral';
+  insert into docs (owner, col, id, data) values (pa.owner, 'assinaturas', p_os, jsonb_build_object(
+    'id', p_os, 'nome', left(trim(p_nome), 120), 'em', floor(extract(epoch from clock_timestamp()) * 1000), 'por', pa.login,
+    'total', public.portal_total(o.data, coalesce(cfg, '{}')), 'img', p_img))
+  on conflict (owner, col, id) do update set data = excluded.data, deleted = false;
+  return true;
+end $$;
+
 -- Fotos: o portal só consegue abrir as fotos (e a assinatura) das OS de clientes com login
 create or replace function public.portal_foto(p_name text) returns boolean
 language sql stable security definer set search_path = public as $$
@@ -323,12 +351,14 @@ revoke all on function public.portal_definir_acesso(text, text, text, uuid) from
 revoke all on function public.portal_remover_acesso(uuid) from public;
 revoke all on function public.portal_foto(text) from public;
 revoke all on function public.portal_orcamento(text, text, numeric, boolean, text) from public;
+revoke all on function public.portal_assinar(text, text, text, text) from public;
 grant execute on function public.portal_cliente(text) to anon, authenticated;
 grant execute on function public.portal_entrar(text, text) to anon, authenticated;
 grant execute on function public.portal_sair(text) to anon, authenticated;
 grant execute on function public.portal_nova_senha(text, text) to anon, authenticated;
 grant execute on function public.portal_foto(text) to anon, authenticated;
 grant execute on function public.portal_orcamento(text, text, numeric, boolean, text) to anon, authenticated;
+grant execute on function public.portal_assinar(text, text, text, text) to anon, authenticated;
 grant execute on function public.portal_definir_acesso(text, text, text, uuid) to authenticated;
 grant execute on function public.portal_remover_acesso(uuid) to authenticated;
 
