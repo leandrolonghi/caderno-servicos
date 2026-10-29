@@ -1,4 +1,4 @@
-/* Conta (entrar, criar conta, sair) e instalação do app */
+/* Conta (entrar, sair) e instalação do app */
 (() => {
 const $ = s => document.querySelector(s);
 const sheet = $('#loginSheet'), form = $('#loginForm'), out = $('#loginMsg');
@@ -22,7 +22,6 @@ async function go(fn) {
   finally { form.querySelectorAll('button').forEach(b => b.disabled = false); }
 }
 form.addEventListener('submit', e => { e.preventDefault(); go(Nuvem.signIn); });
-$('#btnSignUp').onclick = () => go(Nuvem.signUp);
 
 async function pendentes() {
   let n = 0;
