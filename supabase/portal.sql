@@ -210,7 +210,7 @@ begin
   if a is null then return null; end if;
   return (select jsonb_build_object(
     'cliente', c.data->'nome', 'fazenda', c.data->'fazenda', 'documento', public.portal_doc(c.data->>'documento'), 'local', c.data->'local',
-    'empresa', g.data->'nome', 'telefone', g.data->'telefone',
+    'empresa', g.data->'nome', 'razao', g.data->'razao', 'telefone', g.data->'telefone',
     'cnpj', g.data->'cnpj', 'email', g.data->'email', 'endereco', g.data->'endereco',
     'pix', case when coalesce(g.data#>>'{fiscal,pix}', '') <> '' then jsonb_build_object(
       'chave', g.data#>'{fiscal,pix}', 'tipo', g.data#>'{fiscal,pixTipo}', 'cidade', g.data#>'{fiscal,cidade}') end,
