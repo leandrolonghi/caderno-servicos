@@ -1,6 +1,6 @@
 # Controle de OS
 
-App de ordens de serviço da Longhi Manutenções. Funciona no celular, tablet e computador, inclusive sem sinal: tudo fica guardado no aparelho e é enviado para a nuvem quando a conexão volta.
+App de ordens de serviço da Longhi Soluções Agrícolas. Funciona no celular, tablet e computador, inclusive sem sinal: tudo fica guardado no aparelho e é enviado para a nuvem quando a conexão volta.
 
 - `index.html`: o app
 - `nuvem.js`: login e sincronização com o Supabase
