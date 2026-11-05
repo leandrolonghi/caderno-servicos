@@ -361,6 +361,11 @@ main{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
 .qopt:last-child{border-bottom:0}
 .qopt[aria-pressed="true"]{background:var(--accent-soft)}
 .qopt b{font-weight:600}
+.qsel{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:10px;background:var(--bg)}
+.qsel[hidden]{display:none}
+.qsel>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.qsel b{font-weight:600}
+.gcod{grid-template-columns:1fr 110px}
 .qdlg-box{max-height:calc(100dvh - 32px);overflow:auto}
 .camico{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linejoin:round;flex:none}
 .addphoto{gap:4px;flex-direction:column}
@@ -550,7 +555,10 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
     <header><div class="wrap"><button type="button" class="ghost" data-close>Voltar</button><h3 id="cliTitle">Novo cliente</h3><span class="savestate" id="cliSaved"></span></div></header>
     <div class="wrap">
       <fieldset><legend>Dados do cliente</legend>
-        <label class="f" for="cNome">Cliente<input id="cNome" required></label>
+        <div class="grid2 gcod">
+          <label class="f" for="cNome">Cliente<input id="cNome" required></label>
+          <label class="f" for="cCod">Código<input id="cCod" autocomplete="off"></label>
+        </div>
         <label class="f" for="cFazenda">Fazenda<input id="cFazenda"></label>
         <div class="grid2">
           <label class="f" for="cTel">Telefone / WhatsApp<input id="cTel" inputmode="tel"></label>
@@ -667,6 +675,12 @@ const ACORDO = total => `Declaro que concordo com os serviços descritos nesta o
 const assinPortal = id => { const r = assinaturas[id]; return r?.img ? { id: r.img, nome: r.nome, em: n(r.em), total: r.total, portal: true } : null; };
 const CONSENT = 'Confirmo a execução do serviço e autorizo o uso dos meus dados para o registro deste atendimento (LGPD).';
 const cliLabel = c => c ? (c.fazenda ? `${c.nome} · ${c.fazenda}` : c.nome) : '';
+// Código do cliente: número sequencial (0001, 0002…) que pode ser trocado na ficha do cliente
+const proxCod = () => String(Math.max(0, ...Object.values(clientes).map(c => /^\d+$/.test(c.codigo || '') ? +c.codigo : 0)) + 1).padStart(4, '0');
+function codClientes() {
+  const sem = Object.values(clientes).filter(c => !c.codigo).sort((a, b) => (a.criadoEm || 0) - (b.criadoEm || 0) || a.id.localeCompare(b.id));
+  for (const c of sem) store.doc('clientes/' + c.id).update({ codigo: proxCod() });
+}
 const osLabel = a => a.numero ? 'OS ' + String(a.numero).padStart(4, '0') : '';
 const hhmm = ts => new Date(ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 // Horas sempre em decimal (ex.: 3,50 h), como ele pediu
@@ -890,7 +904,7 @@ document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click
 const semAcento = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 function textoBusca(a) {
   const c = clientes[a.clienteId], m = maquinas[a.maquinaId];
-  return semAcento([osLabel(a), a.numero, c?.nome, c?.fazenda, m?.tipo, m?.marca, m?.modelo, m?.serie, tipoTxt(a.tipo), a.categoria, a.problema, a.causa, a.descricao, a.recomendacao,
+  return semAcento([osLabel(a), a.numero, c?.nome, c?.fazenda, c?.codigo, m?.tipo, m?.marca, m?.modelo, m?.serie, tipoTxt(a.tipo), a.categoria, a.problema, a.causa, a.descricao, a.recomendacao,
     ...(a.pecas || []).map(p => p.desc), ...(a.testes || []).map(t => t.desc)].filter(Boolean).join(' '));
 }
 function renderAtend() {
@@ -946,7 +960,7 @@ function renderClients() {
     const ms = machinesOf(c.id);
     list.append(el('button', { type: 'button', class: 'card tap', onclick: () => openCli(c.id) },
       el('div', { class: 'spread' }, el('span', { class: 'title', style: 'font-weight:600;font-size:17px' }, cliLabel(c)), c.exemplo && el('span', { class: 'pill example' }, 'Exemplo')),
-      el('div', { class: 'meta' }, c.local && el('span', {}, c.local), c.telefone && el('span', {}, c.telefone)),
+      el('div', { class: 'meta' }, c.codigo && el('span', {}, 'Cód. ' + c.codigo), c.local && el('span', {}, c.local), c.telefone && el('span', {}, c.telefone)),
       el('div', { class: 'small muted' }, ms.length ? ms.map(m => `${m.tipo} ${m.marca} ${m.modelo}`.trim()).join(' · ') : 'Nenhuma máquina cadastrada'),
     ));
   }
@@ -958,7 +972,7 @@ function openCli(id) {
   editingCli = id || null;
   const c = id ? clientes[id] : {};
   $('#cliTitle').textContent = id ? 'Editar cliente' : 'Novo cliente';
-  $('#cNome').value = c.nome || ''; $('#cFazenda').value = c.fazenda || ''; $('#cTel').value = c.telefone || ''; $('#cDoc').value = c.documento || ''; $('#cLocal').value = c.local || '';
+  $('#cNome').value = c.nome || ''; $('#cCod').value = id ? c.codigo || '' : proxCod(); $('#cFazenda').value = c.fazenda || ''; $('#cTel').value = c.telefone || ''; $('#cDoc').value = c.documento || ''; $('#cLocal').value = c.local || '';
   cliMachines = id ? machinesOf(id).map(m => ({ ...m })) : [];
   cliMachines._removed = [];
   renderMachEdit();
@@ -992,7 +1006,9 @@ async function saveCli() {
   if (!$('#cNome').value.trim()) { $('#cliSaved').textContent = 'Digite o nome'; return false; }
   const id = editingCli || newId(); editingCli = id;
   const prev = clientes[id] || {};
-  const data = { ...prev, id, nome: $('#cNome').value.trim(), fazenda: $('#cFazenda').value.trim(), telefone: $('#cTel').value.trim(), documento: $('#cDoc').value.trim(), local: $('#cLocal').value.trim(), atualizadoEm: Date.now() };
+  const cod = $('#cCod').value.trim();
+  if (cod && Object.values(clientes).some(x => x.id !== id && (x.codigo || '').toLowerCase() === cod.toLowerCase())) { $('#cliSaved').textContent = 'Código já usado'; return false; }
+  const data = { ...prev, id, nome: $('#cNome').value.trim(), codigo: cod || prev.codigo || proxCod(), fazenda: $('#cFazenda').value.trim(), telefone: $('#cTel').value.trim(), documento: $('#cDoc').value.trim(), local: $('#cLocal').value.trim(), atualizadoEm: Date.now() };
   if (!prev.criadoEm) data.criadoEm = Date.now();
   try {
     await store.doc('clientes/' + id).set(data);
@@ -1023,7 +1039,7 @@ let chkPick = null; // grupo principal aberto para escolher o subgrupo na aba Ch
 let editingSvc = null, parts = [], photos = [], apont = [], chk = [], sig = null, tick = null, pausePick = false, kmPick = null, idFotos = {}, apEdit = null, fotosProb = [], testes = [];
 function fillClientSelect(sel, value, placeholder) {
   sel.replaceChildren(el('option', { value: '' }, placeholder));
-  Object.values(clientes).sort((a, b) => a.nome.localeCompare(b.nome)).forEach(c => sel.append(el('option', { value: c.id, selected: c.id === value }, cliLabel(c))));
+  Object.values(clientes).sort((a, b) => a.nome.localeCompare(b.nome)).forEach(c => sel.append(el('option', { value: c.id, selected: c.id === value }, (c.codigo ? c.codigo + ' · ' : '') + cliLabel(c))));
 }
 function fillMachSelect(cid, value) {
   const sel = $('#sMaquina'); sel.replaceChildren(el('option', { value: '' }, cid ? 'Sem máquina específica' : 'Escolha o cliente primeiro'));
@@ -1780,11 +1796,15 @@ $('#btnDelSvc').onclick = async e => {
 };
 $('#fab').onclick = () => {
   if (!Object.keys(clientes).length) { toast('Cadastre um cliente primeiro'); show('v-clientes'); openCli(null); return; }
-  let cid = '';
+  let cid = '', achados = [];
   const norm = t => (t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-  const busca = el('input', { id: 'qBusca', type: 'search', placeholder: 'Pesquisar cliente ou fazenda', autocomplete: 'off' });
-  const res = el('div', { class: 'qres' });
+  const semZeros = t => String(t || '').replace(/^0+(?=.)/, '');
+  // a lista de clientes só aparece depois que você digita; escolhido, o cliente aparece no lugar da busca
+  const busca = el('input', { id: 'qBusca', type: 'search', placeholder: 'Nome, fazenda ou código', autocomplete: 'off' });
+  const res = el('div', { class: 'qres', hidden: true });
+  const sel = el('div', { class: 'qsel', hidden: true });
   const maq = el('select', { id: 'qMaquina', disabled: true });
+  const tipo = el('select', { id: 'qTipo' }, el('option', { value: '' }, tipos().length ? 'Escolha o tipo de serviço' : 'Cadastre em Ajustes'), ...tipos().map(t => el('option', { value: t }, t)));
   const falha = el('textarea', { id: 'qFalha', rows: 3, placeholder: 'Ex.: Trator perdendo força em carga' });
   const garInfo = el('div', { class: 'orcst warn small', hidden: true });
   const fillGar = () => { const g = emGarantia(maq.value, today()); garInfo.hidden = !g; garInfo.textContent = g ? garantiaTxt(g) : ''; };
@@ -1797,28 +1817,43 @@ $('#fab').onclick = () => {
     if (ms.length === 1) maq.value = ms[0].id;
     fillGar();
   };
-  const drawRes = () => {
-    const q = norm(busca.value), cs = Object.values(clientes).filter(c => !q || norm(c.nome + ' ' + (c.fazenda || '')).includes(q)).sort((a, b) => a.nome.localeCompare(b.nome)).slice(0, 8);
-    res.replaceChildren(...(cs.length ? cs.map(c => el('button', { type: 'button', class: 'qopt', 'aria-pressed': String(c.id === cid), onclick: () => { cid = c.id; busca.value = cliLabel(c); fillMaq(); drawRes(); res.hidden = true; } },
-      el('b', {}, c.nome), c.fazenda && el('span', { class: 'small muted' }, c.fazenda))) : [el('div', { class: 'small muted' }, 'Nenhum cliente encontrado')]));
+  const sub = c => [c.codigo && 'Cód. ' + c.codigo, c.fazenda].filter(Boolean).join(' · ');
+  const escolher = c => {
+    cid = c ? c.id : ''; fillMaq();
+    busca.hidden = !!c; res.hidden = true;
+    sel.hidden = !c;
+    if (c) sel.replaceChildren(el('div', {}, el('b', {}, c.nome), sub(c) && el('span', { class: 'small muted' }, sub(c))),
+      el('button', { type: 'button', class: 'ghost', onclick: () => { escolher(null); busca.value = ''; busca.focus(); } }, 'Trocar'));
   };
-  busca.addEventListener('input', () => { cid = ''; fillMaq(); res.hidden = false; drawRes(); });
-  busca.addEventListener('focus', () => { if (!cid) { res.hidden = false; drawRes(); } });
-  fillMaq(); drawRes();
+  const drawRes = () => {
+    const q = norm(busca.value.trim());
+    res.hidden = !q;
+    if (!q) { achados = []; return res.replaceChildren(); }
+    // código digitado igual ao do cliente aparece primeiro
+    achados = Object.values(clientes).filter(c => norm([c.nome, c.fazenda, c.codigo].join(' ')).includes(q))
+      .sort((a, b) => (semZeros(b.codigo) === semZeros(q)) - (semZeros(a.codigo) === semZeros(q)) || a.nome.localeCompare(b.nome)).slice(0, 8);
+    res.replaceChildren(...(achados.length ? achados.map(c => el('button', { type: 'button', class: 'qopt', onclick: () => escolher(c) },
+      el('b', {}, c.nome), sub(c) && el('span', { class: 'small muted' }, sub(c)))) : [el('div', { class: 'small muted', style: 'padding:10px 12px' }, 'Nenhum cliente encontrado')]));
+  };
+  busca.addEventListener('input', drawRes);
+  busca.addEventListener('keydown', e => { if (e.key === 'Enter' && achados.length) { e.preventDefault(); escolher(achados[0]); } });
+  fillMaq();
   const close = () => ov.remove();
   const ov = el('div', { class: 'qdlg', role: 'dialog', 'aria-label': 'Nova OS', onclick: e => { if (e.target === ov) close(); } },
     el('div', { class: 'qdlg-box' },
       el('h3', {}, 'Nova OS'),
-      el('label', { class: 'f', for: 'qBusca' }, 'Cliente', busca), res,
+      el('label', { class: 'f', for: 'qBusca' }, 'Cliente', busca), sel, res,
       el('label', { class: 'f', for: 'qMaquina' }, 'Máquina', maq), garInfo,
+      el('label', { class: 'f', for: 'qTipo' }, 'Tipo de serviço', tipo),
       el('label', { class: 'f', for: 'qFalha' }, 'Falha', falha),
       el('div', { class: 'row', style: 'justify-content:flex-end' },
         el('button', { type: 'button', class: 'ghost', onclick: close }, 'Cancelar'),
         el('button', { type: 'button', class: 'primary', onclick: async () => {
           if (!cid) return toast('Escolha o cliente');
           if (!maq.disabled && !maq.value) return toast('Escolha a máquina');
+          if (tipos().length && !tipo.value) return toast('Escolha o tipo de serviço');
           if (!falha.value.trim()) return toast('Descreva a falha');
-          close(); openSvc(null, { clienteId: cid, maquinaId: maq.value || '', problema: falha.value.trim() });
+          close(); openSvc(null, { clienteId: cid, maquinaId: maq.value || '', tipo: tipo.value, problema: falha.value.trim() });
           svcAuto.kick(); await svcAuto.flush();
         } }, 'Criar OS'))));
   document.body.append(ov); requestAnimationFrame(() => busca.focus());
@@ -2516,6 +2551,7 @@ async function conectar() {
   const watch = (col, key) => db.collection(col).onSnapshot(s => {
     const m = {}; s.docs.forEach(d => m[d.id] = { ...d.data(), id: d.id });
     server[col] = m; loaded[key] = true; LS.set('cs-cache', server); recompute();
+    if (col === 'clientes') codClientes();
   }, err => { $('#dbBanner').hidden = false; $('#dbBanner').textContent = 'A conexão caiu. Continue registrando normalmente; tudo fica salvo neste aparelho. Recarregue o app quando tiver sinal.'; });
   for (const [col, key] of Object.entries(COLS)) watch(col, key);
   db.doc('config/geral').onSnapshot(s => { server.config = s.exists ? { ...s.data() } : null; LS.set('cs-cache', server); recompute(); });
