@@ -2957,7 +2957,7 @@ const REPORTS = {
       rows: l.map(x => [fmtDate(x.data), ehDev(x) ? 'Devolução' : 'Aporte', x.descricao || '', brl(v(x)), brl(vc(x))]),
       foot: ['Total', '', '', brl(l.reduce((s, x) => s + v(x), 0)), brl(l.reduce((s, x) => s + vc(x), 0))] };
   } },
-  contador: { t: 'Resumo para o contador', d: 'Faturamento, notas, recebimentos e gastos do período, com as notas fiscais dos gastos', build() {
+  contador: { t: 'Relatório Contabilidade', d: 'Faturamento, notas, recebimentos e despesas do período, com as notas fiscais das despesas', build() {
     const { clientes } = D(), cli = f => clientes[f.clienteId]?.nome || '', soma = (l, k = 'total') => l.reduce((s, x) => s + n(x[k]), 0), por = k => (x, y) => (x[k] || '').localeCompare(y[k] || '');
     const os = osDone(), serv = os.reduce((s, a) => s + calc(a).total, 0);
     const emit = fats().filter(f => inR(f.emissao)).sort(por('emissao')), validas = emit.filter(f => f.status !== 'cancelada');
@@ -2965,16 +2965,20 @@ const REPORTS = {
     const gs = gastosR().sort(por('data')), tg = soma(gs, 'valor');
     const nf = f => f.nf?.status === 'emitida' && f.nf.numero ? 'NF ' + f.nf.numero : NFST[f.nf?.status || 'pendente'];
     const linha = (g, chave) => [fmtDate(g.data), g.categoria || '', g.fornecedor || '', g.descricao || '', g.nf || '', chave, brl(g.valor)];
+    const qtd = (q, um, varios) => `${q} ${q === 1 ? um : varios}`;
     return {
-      resumo: [['Serviços realizados', brl(serv)], ['Faturas emitidas', brl(soma(validas))], ['Recebido', brl(soma(pagas))], ['Gastos', brl(tg)],
-        ['Resultado (serviços menos gastos)', brl(serv - tg)]],
+      resumo: [['Serviços realizados', brl(serv)], ['Faturas emitidas', brl(soma(validas))], ['Recebido', brl(soma(pagas))], ['Despesas', brl(tg)],
+        ['Resultado (serviços menos despesas)', brl(serv - tg)]],
       secoes: [
-        { t: 'Faturas emitidas', head: ['Fatura', 'Emissão', 'Cliente', 'Nota fiscal', 'Situação', 'Valor'], right: [5],
+        { t: 'Faturas emitidas', head: ['Fatura', 'Emissão', 'Cliente', 'Nota fiscal', 'Situação', 'Valor'], right: [5], vazio: 'Nenhuma fatura emitida no período.',
+          info: `${qtd(emit.length, 'fatura', 'faturas')} · ${brl(soma(validas))}`,
           rows: emit.map(f => [fatLabel(f), fmtDate(f.emissao), cli(f), nf(f), FST[fatStatus(f)], brl(f.total)]), foot: ['Total', '', '', '', '', brl(soma(validas))] },
-        { t: 'Recebimentos', head: ['Fatura', 'Pago em', 'Cliente', 'Forma', 'Valor'], right: [4],
+        { t: 'Recebimentos', head: ['Fatura', 'Pago em', 'Cliente', 'Forma', 'Valor'], right: [4], vazio: 'Nenhum recebimento no período.',
+          info: `${qtd(pagas.length, 'recebimento', 'recebimentos')} · ${brl(soma(pagas))}`,
           rows: pagas.map(f => [fatLabel(f), fmtDate(f.pagoEm), cli(f), f.forma || '', brl(f.total)]), foot: ['Total', '', '', '', brl(soma(pagas))] },
-        // no PDF: a chave vai numa linha própria de cada gasto (para copiar inteira) e "Ver nota" leva à página da nota
-        { t: 'Gastos', head: ['Data', 'Categoria', 'Fornecedor', 'Descrição', 'NF', 'Chave de acesso', 'Valor'], right: [6],
+        // no PDF: a chave vai numa linha própria de cada despesa (para copiar inteira) e "Ver nota" leva à página da nota
+        { t: 'Despesas', head: ['Data', 'Categoria', 'Fornecedor', 'Descrição', 'NF', 'Chave de acesso', 'Valor'], right: [6], vazio: 'Nenhuma despesa no período.',
+          info: `${qtd(gs.length, 'despesa', 'despesas')} · ${brl(tg)}`,
           rows: gs.map(g => linha(g, window.NotaFiscal?.formatarChave(g.chave) || g.chave || '')), foot: ['Total', '', '', '', '', '', brl(tg)],
           // na planilha, ="..." para o Excel não virar a chave em número com expoente
           csv: gs.map(g => linha(g, g.chave ? `="${g.chave}"` : '')), gastos: gs, total: tg }] };
@@ -3002,7 +3006,7 @@ function renderReport(body, k) {
   const temDados = r.secoes ? r.secoes.some(x => x.rows.length) : r.rows.length;
   if (r.secoes) body.append(
     el('div', { class: 'kpis' }, r.resumo.map(([l, v]) => el('div', { class: 'kpi' }, el('span', {}, l), el('b', {}, v)))),
-    ...r.secoes.map(x => el('div', { class: 'gsec' }, el('h3', {}, x.t), x.rows.length ? tableEl(x.head, x.rows, x.right, x.foot) : el('div', { class: 'empty' }, 'Nada neste período.'))));
+    ...r.secoes.map(x => el('div', { class: 'gsec' }, el('h3', {}, x.t), x.rows.length ? tableEl(x.head, x.rows, x.right, x.foot) : el('div', { class: 'empty' }, x.vazio || 'Nada neste período.'))));
   else body.append(r.rows.length ? tableEl(r.head, r.rows, r.right, r.foot) : el('div', { class: 'empty' }, 'Nada registrado neste período.'));
   body.append(el('div', { class: 'gactions' },
     el('button', { type: 'button', class: 'primary', disabled: !temDados, onclick: () => reportPdf(R, r) }, 'Baixar PDF'),
@@ -3018,13 +3022,13 @@ function reportCsv(R, r) {
 
 /* ---------- PDF (mesmo cabeçalho da OS) ---------- */
 const INK = [29, 33, 28], MUT = [93, 101, 91], LINE = [214, 217, 209], YEL = [254, 192, 4], ZEBRA = [246, 247, 244];
-function pdfBase(kind, label, subline, landscape) {
+function pdfBase(kind, label, subline, landscape, { contato = true } = {}) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: landscape ? 'landscape' : 'portrait' });
   const W = doc.internal.pageSize.getWidth(), M = 14, cfg = D().cfg;
   doc.setFillColor(0, 0, 0); doc.rect(0, 0, W, 30, 'F');
   doc.addImage(LOGO_FULL, 'JPEG', M - 2, 2, 33.8, 26);
-  const emp = [cfg.cnpj && `CNPJ ${cfg.cnpj}`, [cfg.telefone, cfg.email].filter(Boolean).join(' · '), cfg.endereco].filter(Boolean);
+  const emp = [cfg.cnpj && `CNPJ ${cfg.cnpj}`, ...(contato ? [[cfg.telefone, cfg.email].filter(Boolean).join(' · '), cfg.endereco] : [])].filter(Boolean);
   doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold');
   doc.setFontSize(label.length > 14 ? 13 : 18); const lw = doc.getTextWidth(label); // o nome da empresa não pode encostar no título à direita
   pdfNome(doc, razaoSocial(cfg), 56, emp.length ? 11 : 16, Math.min(96, W - M - lw - 5 - 56));
@@ -3036,7 +3040,25 @@ function pdfBase(kind, label, subline, landscape) {
   doc.setTextColor(...INK);
   const ctx = { doc, W, M, y: 38, CW: W - 2 * M, H: doc.internal.pageSize.getHeight() };
   ctx.space = h => { if (ctx.y + h > ctx.H - 18) { doc.addPage(); ctx.y = M; } };
-  ctx.heading = t => { ctx.space(14); ctx.y += 4; doc.setFillColor(...YEL); doc.rect(M, ctx.y - 3.6, 1.6, 4.6, 'F'); doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(...INK); doc.text(t.toUpperCase(), M + 3.6, ctx.y); ctx.y += 5; };
+  ctx.heading = (t, info) => {
+    ctx.space(14); ctx.y += 4; doc.setFillColor(...YEL); doc.rect(M, ctx.y - 3.6, 1.6, 4.6, 'F'); doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(...INK); doc.text(t.toUpperCase(), M + 3.6, ctx.y);
+    if (info) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...MUT); doc.text(info, W - M, ctx.y, { align: 'right' }); }
+    ctx.y += 5;
+  };
+  // números do período em caixas lado a lado; a última (resultado) em destaque
+  ctx.kpis = pairs => {
+    const q = pairs.length, gap = 3, w = (ctx.CW - gap * (q - 1)) / q, h = 19;
+    ctx.space(h + 4);
+    pairs.forEach(([l, v], i) => {
+      const x = M + i * (w + gap), d = i === q - 1;
+      doc.setFillColor(...(d ? INK : ZEBRA)); doc.roundedRect(x, ctx.y, w, h, 1.2, 1.2, 'F');
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(6.8); doc.setTextColor(...(d ? [205, 205, 205] : MUT));
+      doc.splitTextToSize(l.toUpperCase(), w - 6).slice(0, 2).forEach((t, j) => doc.text(t, x + 3, ctx.y + 5 + j * 2.9));
+      doc.setFont('helvetica', 'bold'); let fs = 12; doc.setFontSize(fs); while (doc.getTextWidth(v) > w - 6 && fs > 8) doc.setFontSize(--fs);
+      doc.setTextColor(...(d ? YEL : INK)); doc.text(v, x + 3, ctx.y + h - 4);
+    });
+    ctx.y += h + 4;
+  };
   ctx.para = (t, size = 10, color = INK) => { doc.setFont('helvetica', 'normal'); doc.setFontSize(size); doc.setTextColor(...color); for (const line of doc.splitTextToSize(t, ctx.CW)) { ctx.space(5); doc.text(line, M, ctx.y); ctx.y += size * 0.45; } ctx.y += 1.5; };
   ctx.kv = pairs => { const colW = ctx.CW / 2; for (let i = 0; i < pairs.length; i += 2) { ctx.space(10); [pairs[i], pairs[i + 1]].forEach((p, j) => { if (!p) return; doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...MUT); doc.text(p[0].toUpperCase(), M + j * colW, ctx.y); doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...INK); doc.text(doc.splitTextToSize(String(p[1] || '—'), colW - 4)[0], M + j * colW, ctx.y + 4.5); }); ctx.y += 10; } };
   ctx.table = (head, body, right = [], foot, extra = {}) => {
@@ -3060,24 +3082,26 @@ function pdfBase(kind, label, subline, landscape) {
 async function reportPdf(R, r) {
   if (!window.jspdf?.jsPDF) return toast('O gerador de PDF não carregou. Recarregue o app com internet.');
   const wide = !r.secoes && r.head.length > 6;
-  const ctx = pdfBase('RELATÓRIO', R.t, R.all ? fmtDate(today()) : perTxt(), wide);
-  ctx.para(R.all ? `Posição em ${fmtDate(today())}` : `Período: ${per === 'tudo' ? 'todos os registros' : perTxt().toLowerCase()} (${periodoTxt()})`, 9, MUT);
+  // relatório da contabilidade: o período em datas no cabeçalho, sem telefone/e-mail/endereço, números em caixas
+  const pTxt = periodoTxt(), ctx = pdfBase('RELATÓRIO', R.t, R.all ? fmtDate(today()) : r.secoes ? pTxt[0].toUpperCase() + pTxt.slice(1) : perTxt(), wide, { contato: !r.secoes });
+  if (!r.secoes) ctx.para(R.all ? `Posição em ${fmtDate(today())}` : `Período: ${per === 'tudo' ? 'todos os registros' : perTxt().toLowerCase()} (${pTxt})`, 9, MUT);
   if (r.secoes) {
-    ctx.kv(r.resumo);
+    ctx.y = 40; ctx.kpis(r.resumo);
     for (const x of r.secoes) {
-      ctx.heading(x.t);
-      if (!x.rows.length) ctx.para('Nada neste período.', 9, MUT);
+      ctx.heading(x.t, x.rows.length ? x.info : '');
+      if (!x.rows.length) ctx.para(x.vazio || 'Nada neste período.', 9, MUT);
       else if (x.gastos) tabelaGastos(ctx, x);
       else ctx.table(x.head, x.rows.map(l => l.map(String)), x.right, x.foot?.map(String));
     }
     const g = r.secoes.find(x => x.gastos && x.gastos.some(temNota));
     if (g) { toast('Juntando as notas fiscais no PDF…'); await anexarNotas(ctx, g); }
   } else ctx.table(r.head, r.rows.map(l => l.map(String)), r.right, r.foot?.map(String));
-  ctx.footer(`${D().cfg.nome || 'Longhi Soluções Agrícolas'} · ${R.t} · gerado em ${new Date().toLocaleDateString('pt-BR')}`);
+  const agora = new Date();
+  ctx.footer(`${D().cfg.nome || 'Longhi Soluções Agrícolas'} · ${R.t} · gerado em ${agora.toLocaleDateString('pt-BR')} às ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`);
   await saveFile(`${slug(R.t)}-${R.all ? today() : slug(perTxt())}.pdf`, ctx.doc.output('blob'));
 }
 
-// gastos do resumo para o contador: cada linha com a chave embaixo (texto inteiro, para copiar) e "Ver nota" com link
+// despesas do relatório da contabilidade: cada linha com a chave embaixo (texto inteiro, para copiar) e "Ver nota" com link
 const temNota = g => !!(g.foto || g.arquivo);
 const LINK = [29, 92, 199];
 function tabelaGastos(ctx, x) {
@@ -3124,7 +3148,7 @@ async function anexarNotas(ctx, x) {
       doc.addPage('a4', 'portrait'); pag[g.id] ||= doc.getNumberOfPages();
       doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...INK); doc.text(doc.splitTextToSize(titulo, W - 2 * M - 40)[0], M, 12);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...LINK);
-      doc.textWithLink('Voltar aos gastos', W - M - doc.getTextWidth('Voltar aos gastos'), 12, { pageNumber: x.pgTabela });
+      doc.textWithLink('Voltar às despesas', W - M - doc.getTextWidth('Voltar às despesas'), 12, { pageNumber: x.pgTabela });
       doc.setDrawColor(...LINE); doc.setLineWidth(0.2); doc.line(M, 15, W - M, 15);
     };
     for (const im of imgs) {
