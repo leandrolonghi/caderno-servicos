@@ -153,11 +153,15 @@
       l.its.sort((a, b) => a.x - b.x);
       let f = null;
       for (const it of l.its) {
-        if (f && it.x - (f.x + f.w) <= Math.max(f.h, it.h) * (it.conf != null ? 1.6 : 1.0)) { f.s += ' ' + it.s; f.w = Math.max(f.w, it.x + it.w - f.x); f.h = Math.max(f.h, it.h); f.confs.push(it.conf ?? 100); }
-        else { f = { s: it.s, x: it.x, y: it.g != null ? it.y : l.y, w: it.w, h: it.h, linha: l, confs: [it.conf ?? 100] }; P.push(f); }
+        // no OCR, um risco solto ("—", "|") entre duas células não pode emendar uma na outra
+        const real = it.conf == null || /[a-z0-9]/i.test(norm(it.s)), lim = Math.max(f?.h || 0, it.h) * (it.conf != null ? 1.6 : 1.0);
+        if (f && it.x - (f.x + f.w) <= lim && (!real || it.x - f.fim <= lim)) {
+          f.s += ' ' + it.s; f.w = Math.max(f.w, it.x + it.w - f.x);
+          if (real) { f.fim = it.x + it.w; f.h = f.real ? Math.max(f.h, it.h) : it.h; f.real = true; f.confs.push(it.conf ?? 100); }
+        } else { f = { s: it.s, x: it.x, y: it.g != null ? it.y : l.y, w: it.w, h: it.h, linha: l, confs: real ? [it.conf ?? 100] : [], fim: real ? it.x + it.w : it.x, real }; P.push(f); }
       }
     }
-    for (const f of P) { f.n = norm(f.s).replace(/^[^a-z0-9]+|[^a-z0-9%]+$/g, ''); f.conf = f.confs.reduce((a, b) => a + b, 0) / f.confs.length; }
+    for (const f of P) { f.n = norm(f.s).replace(/^[^a-z0-9]+|[^a-z0-9%]+$/g, ''); f.conf = f.confs.length ? f.confs.reduce((a, b) => a + b, 0) / f.confs.length : 0; delete f.real; }
     return P;
   }
   const textoDe = P => {
@@ -328,7 +332,7 @@
     if (opt.ocr && r.fornecedor) {
       const nome = r.fornecedor, ps = P.filter(f => f.s.length >= 3 && (nome.includes(f.s) || f.s.includes(nome)));
       const conf = ps.length ? Math.min(...ps.map(f => f.conf)) : 0;
-      if (conf >= 75) r.fornecedorPalpite = nome;
+      if (conf >= 75 && /^[A-Za-zÀ-ú0-9 &.,'/-]+$/.test(nome)) r.fornecedorPalpite = nome; // ":", "|", "!" no meio = leitura quebrada
       r.fornecedor = undefined;
     }
     return r;
@@ -341,7 +345,194 @@
     const ctx = c.getContext('2d', { willReadFrequently: true }); ctx.drawImage(src, 0, 0, c.width, c.height);
     return c;
   }
-  async function lerCodigos(src) {
+  const cinza = (d, i) => (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000 | 0;
+  /* foto de documento: acha a folha (a maior área clara), devolve os 4 cantos (sup. esq., sup. dir., inf. dir., inf. esq.)
+     ou null quando a folha ocupa a foto toda ou não dá para ter certeza */
+  function acharFolha(src) {
+    const k = Math.min(1, 400 / Math.max(src.width, src.height)), w = Math.max(8, Math.round(src.width * k)), h = Math.max(8, Math.round(src.height * k)), n = w * h;
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const ctx = c.getContext('2d', { willReadFrequently: true }); ctx.drawImage(src, 0, 0, w, h);
+    const d = ctx.getImageData(0, 0, w, h).data, g = new Uint8Array(n), hist = new Uint32Array(256);
+    for (let i = 0; i < n; i++) { g[i] = cinza(d, i * 4); hist[g[i]]++; }
+    // linhas finas escuras (traços dos quadros, texto) não podem cortar a folha em pedaços: alarga o claro
+    let a = g;
+    for (let r = 0; r < 2; r++) {
+      const b = new Uint8Array(n);
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        let m = 0;
+        for (let yy = Math.max(0, y - 1); yy <= Math.min(h - 1, y + 1); yy++) for (let xx = Math.max(0, x - 1); xx <= Math.min(w - 1, x + 1); xx++) if (a[yy * w + xx] > m) m = a[yy * w + xx];
+        b[y * w + x] = m;
+      }
+      a = b;
+    }
+    // limiar de Otsu entre folha (clara) e fundo
+    let soma = 0; for (let t = 0; t < 256; t++) soma += t * hist[t];
+    let sB = 0, wB = 0, melhor = -1, lim = 128;
+    for (let t = 0; t < 256; t++) {
+      wB += hist[t]; if (!wB) continue; const wF = n - wB; if (!wF) break;
+      sB += t * hist[t]; const v = wB * wF * (sB / wB - (soma - sB) / wF) ** 2;
+      if (v > melhor) { melhor = v; lim = t; }
+    }
+    // a maior região clara ligada
+    const lab = new Int32Array(n).fill(-1), fila = new Int32Array(n);
+    let top = null;
+    for (let i0 = 0; i0 < n; i0++) {
+      if (lab[i0] >= 0 || a[i0] <= lim) continue;
+      let ini = 0, fim = 0, cont = 0, borda = 0;
+      fila[fim++] = i0; lab[i0] = i0;
+      while (ini < fim) {
+        const i = fila[ini++], x = i % w, y = (i / w) | 0; cont++;
+        if (x === 0 || y === 0 || x === w - 1 || y === h - 1) borda++;
+        for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, y > 0 ? i - w : -1, y < h - 1 ? i + w : -1])
+          if (j >= 0 && lab[j] < 0 && a[j] > lim) { lab[j] = i0; fila[fim++] = j; }
+      }
+      if (!top || cont > top.cont) top = { id: i0, cont, borda };
+    }
+    if (!top || top.cont < n * 0.12 || top.borda > (w + h) * 0.15) return null;
+    // a borda de cada lado da folha: o primeiro claro de verdade em cada linha/coluna
+    const dentro = i => lab[i] === top.id && g[i] > lim;
+    const esq = [], dir = [], cima = [], baixo = [];
+    let y0 = h, y1 = -1, x0 = w, x1 = -1;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (dentro(y * w + x)) { if (y < y0) y0 = y; if (y > y1) y1 = y; if (x < x0) x0 = x; if (x > x1) x1 = x; }
+    const my = (y1 - y0) * 0.12, mx = (x1 - x0) * 0.12;
+    for (let y = Math.ceil(y0 + my); y <= y1 - my; y++) {
+      let l = -1, r = -1; for (let x = 0; x < w; x++) if (dentro(y * w + x)) { if (l < 0) l = x; r = x; }
+      if (l >= 0) { esq.push([y, l]); dir.push([y, r]); }
+    }
+    for (let x = Math.ceil(x0 + mx); x <= x1 - mx; x++) {
+      let t = -1, b = -1; for (let y = 0; y < h; y++) if (dentro(y * w + x)) { if (t < 0) t = y; b = y; }
+      if (t >= 0) { cima.push([x, t]); baixo.push([x, b]); }
+    }
+    // reta que passa pela maioria dos pontos (o que foge, como um pedaço claro do fundo encostado, fica de fora)
+    let sem = 12345; const sorte = () => (sem = (sem * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    const reta = pts => {
+      if (pts.length < 12) return null;
+      let best = null; const tol = 1.5;
+      for (let it = 0; it < 200; it++) {
+        const p = pts[(sorte() * pts.length) | 0], q = pts[(sorte() * pts.length) | 0];
+        if (Math.abs(p[0] - q[0]) < pts.length * 0.25) continue;
+        const a = (q[1] - p[1]) / (q[0] - p[0]), b = p[1] - a * p[0];
+        let inl = 0; for (const r of pts) if (Math.abs(r[1] - a * r[0] - b) <= tol) inl++;
+        if (!best || inl > best.inl) best = { a, b, inl };
+      }
+      if (!best || best.inl < pts.length * 0.45) return null;
+      let st = 0, ss = 0, stt = 0, sts = 0, c = 0;
+      for (const r of pts) if (Math.abs(r[1] - best.a * r[0] - best.b) <= tol) { st += r[0]; ss += r[1]; stt += r[0] * r[0]; sts += r[0] * r[1]; c++; }
+      const den = c * stt - st * st; if (!den) return best;
+      const a = (c * sts - st * ss) / den; return { a, b: (ss - a * st) / c };
+    };
+    const L = reta(esq), R = reta(dir), T = reta(cima), Bx = reta(baixo);
+    if (!L || !R || !T || !Bx) return null;
+    // L, R: x = a·y + b; T, B: y = a·x + b
+    const canto = (V, Hz) => { const x = (V.a * Hz.b + V.b) / (1 - V.a * Hz.a); return [x, Hz.a * x + Hz.b]; };
+    const q = [canto(L, T), canto(R, T), canto(R, Bx), canto(L, Bx)];
+    let area = 0; for (let i = 0; i < 4; i++) { const [xa, ya] = q[i], [xb, yb] = q[(i + 1) % 4]; area += xa * yb - xb * ya; }
+    area = Math.abs(area) / 2;
+    const lados = [0, 1, 2, 3].map(i => Math.hypot(q[i][0] - q[(i + 1) % 4][0], q[i][1] - q[(i + 1) % 4][1]));
+    // a folha precisa estar inteira na foto, com fundo em volta, e parecer um quadrilátero
+    if (area > n * 0.92 || top.cont / area < 0.75 || top.cont / area > 1.3 || Math.min(...lados) < Math.min(w, h) * 0.2) return null;
+    if (q.some(([x, y]) => !(x > -w * 0.03 && x < w * 1.03 && y > -h * 0.03 && y < h * 1.03))) return null;
+    for (let i = 0; i < 4; i++) { // convexo
+      const [ax, ay] = q[i], [bx, by] = q[(i + 1) % 4], [cx, cy] = q[(i + 2) % 4];
+      if ((bx - ax) * (cy - by) - (by - ay) * (cx - bx) <= 0) return null;
+    }
+    // afasta um pixel da borda (para dentro do papel) e volta à escala da foto
+    const cx = q.reduce((s, p) => s + p[0], 0) / 4, cy = q.reduce((s, p) => s + p[1], 0) / 4;
+    return q.map(([x, y]) => { const dx = cx - x, dy = cy - y, l = Math.hypot(dx, dy) || 1; return [(x + dx / l + 0.5) / k, (y + dy / l + 0.5) / k]; });
+  }
+  // inclinação das linhas de texto (radianos): o ângulo em que as linhas escuras ficam mais "empilhadas"
+  function inclinacao(g, w, h, ya = 0, yb = h) {
+    const p = Math.max(1, Math.round(Math.max(w, h) / 900)), xs = [], ys = [];
+    let soma = 0, c = 0; for (let i = 0; i < w * h; i += 7) { soma += g[i]; c++; }
+    const lim = soma / c * 0.6;
+    for (let y = Math.round(ya); y < yb; y += p) for (let x = 0; x < w; x += p) if (g[y * w + x] < lim) { xs.push(x / p); ys.push(y / p); }
+    if (xs.length < 200) return null;
+    const N = Math.ceil(Math.hypot(w, h) / p) + 2, hist = new Float64Array(2 * N);
+    const nota = a => {
+      const t = a * Math.PI / 180, sn = Math.sin(t), cs = Math.cos(t); hist.fill(0);
+      for (let i = 0; i < xs.length; i++) hist[(ys[i] * cs - xs[i] * sn + N) | 0]++;
+      let v = 0; for (let i = 0; i < hist.length; i++) v += hist[i] * hist[i]; return v;
+    };
+    let melhor = 0, mv = nota(0);
+    for (let a = -8; a <= 8; a += 0.5) { const v = nota(a); if (v > mv) { mv = v; melhor = a; } }
+    const base = melhor;
+    for (let a = base - 0.5; a <= base + 0.5; a += 0.1) { const v = nota(a); if (v > mv) { mv = v; melhor = a; } }
+    return melhor * Math.PI / 180;
+  }
+  // homografia do retângulo (0,0)-(W,H) para o quadrilátero q
+  function homografia(q, W, H, P = [[0, 0], [W, 0], [W, H], [0, H]]) {
+    const A = [];
+    for (let i = 0; i < 4; i++) {
+      const [u, v] = P[i], [x, y] = q[i];
+      A.push([u, v, 1, 0, 0, 0, -u * x, -v * x, x], [0, 0, 0, u, v, 1, -u * y, -v * y, y]);
+    }
+    for (let c = 0; c < 8; c++) {
+      let p = c; for (let r = c + 1; r < 8; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r;
+      [A[c], A[p]] = [A[p], A[c]];
+      for (let r = 0; r < 8; r++) if (r !== c) { const f = A[r][c] / A[c][c]; for (let j = c; j < 9; j++) A[r][j] -= f * A[c][j]; }
+    }
+    return A.map((l, i) => l[8] / l[i]);
+  }
+  /* folha endireitada, em tons de cinza, com a luz igualada (sombra e sol) e ampliada para o OCR.
+     max: lado maior da imagem final */
+  function folhaPlana(src, max) {
+    const q = acharFolha(src);
+    const fonte = desenhar(src, 3200), ks = fonte.width / src.width;
+    const fw = fonte.width, fh = fonte.height, fd = fonte.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, fw, fh).data;
+    const fg = new Uint8Array(fw * fh); for (let i = 0; i < fw * fh; i++) fg[i] = cinza(fd, i * 4);
+    let W, H, M = null;
+    if (q) {
+      const qs = q.map(([x, y]) => [x * ks, y * ks]), L = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+      const lw = (L(qs[0], qs[1]) + L(qs[3], qs[2])) / 2, lh = (L(qs[0], qs[3]) + L(qs[1], qs[2])) / 2, k = Math.min(2.5, max / Math.max(lw, lh));
+      W = Math.round(lw * k); H = Math.round(lh * k); M = homografia(qs, W, H);
+    } else {
+      // a folha ocupa a foto: deixa as linhas de texto retas pela inclinação no alto e embaixo (foto tirada de lado)
+      const k = Math.min(2.5, max / Math.max(fw, fh)), t = inclinacao(fg, fw, fh) || 0;
+      let ta = inclinacao(fg, fw, fh, 0, fh * 0.4), tb = inclinacao(fg, fw, fh, fh * 0.6, fh);
+      if (ta == null || tb == null || Math.abs(ta - tb) > 0.07) ta = tb = t;
+      W = Math.round(fw * k); H = Math.round(fh * k);
+      const c = fw / 2, ya = fh * 0.2, yb = fh * 0.8;
+      M = homografia([[0, ya - c * Math.tan(ta)], [fw, ya + c * Math.tan(ta)], [fw, yb + c * Math.tan(tb)], [0, yb - c * Math.tan(tb)]], W, H, [[0, ya * k], [W, ya * k], [W, yb * k], [0, yb * k]]);
+    }
+    const out = new Uint8Array(W * H);
+    for (let v = 0; v < H; v++) for (let u = 0; u < W; u++) {
+      const z = M[6] * u + M[7] * v + 1; let x = (M[0] * u + M[1] * v + M[2]) / z, y = (M[3] * u + M[4] * v + M[5]) / z;
+      if (x < -1 || y < -1 || x > fw || y > fh) { out[v * W + u] = 255; continue; }
+      x = Math.max(0, Math.min(fw - 1.001, x)); y = Math.max(0, Math.min(fh - 1.001, y));
+      const x0 = x | 0, y0 = y | 0, ax = x - x0, ay = y - y0, i = y0 * fw + x0;
+      out[v * W + u] = (fg[i] * (1 - ax) + fg[i + 1] * ax) * (1 - ay) + (fg[i + fw] * (1 - ax) + fg[i + fw + 1] * ax) * ay;
+    }
+    // luz igual: divide pelo fundo (o claro do papel em volta), estimado numa grade grossa
+    const B = Math.max(8, Math.round(Math.max(W, H) / 40)), gw = Math.ceil(W / B), gh = Math.ceil(H / B), fundo = new Float32Array(gw * gh);
+    for (let by = 0; by < gh; by++) for (let bx = 0; bx < gw; bx++) {
+      const hs = new Uint32Array(32); let t = 0;
+      for (let y = by * B; y < Math.min(H, by * B + B); y += 2) for (let x = bx * B; x < Math.min(W, bx * B + B); x += 2) { hs[out[y * W + x] >> 3]++; t++; }
+      let acc = 0, p = 31; for (; p > 0; p--) { acc += hs[p]; if (acc >= t * 0.1) break; } // 90º percentil = papel
+      fundo[by * gw + bx] = p * 8 + 4;
+    }
+    const suave = new Float32Array(gw * gh);
+    for (let by = 0; by < gh; by++) for (let bx = 0; bx < gw; bx++) {
+      let s = 0, c = 0; for (let yy = Math.max(0, by - 1); yy <= Math.min(gh - 1, by + 1); yy++) for (let xx = Math.max(0, bx - 1); xx <= Math.min(gw - 1, bx + 1); xx++) { s += fundo[yy * gw + xx]; c++; }
+      suave[by * gw + bx] = s / c;
+    }
+    // margem branca em volta: o OCR perde o texto encostado na borda
+    const m = Math.round(Math.max(W, H) * 0.02), c = document.createElement('canvas'); c.width = W + 2 * m; c.height = H + 2 * m;
+    const ctx = c.getContext('2d', { willReadFrequently: true }), img = ctx.createImageData(W, H), od = img.data;
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+    for (let v = 0; v < H; v++) {
+      const gy = Math.min(gh - 1.001, Math.max(0, v / B - 0.5)), y0 = gy | 0, ay = gy - y0;
+      for (let u = 0; u < W; u++) {
+        const gx = Math.min(gw - 1.001, Math.max(0, u / B - 0.5)), x0 = gx | 0, ax = gx - x0, j = y0 * gw + x0;
+        const f = (suave[j] * (1 - ax) + suave[Math.min(j + 1, gw * gh - 1)] * ax) * (1 - ay) + (suave[Math.min(j + gw, gw * gh - 1)] * (1 - ax) + suave[Math.min(j + gw + 1, gw * gh - 1)] * ax) * ay;
+        const y = Math.max(0, Math.min(255, out[v * W + u] / Math.max(24, f) * 255)), o = (v * W + u) * 4;
+        od[o] = od[o + 1] = od[o + 2] = y; od[o + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, m, m);
+    c.folha = !!q;
+    return c;
+  }
+  async function lerCodigos(src, plano) {
     const textos = [];
     const achou = () => textos.some(t => doCodigo(t).chave);
     if ('BarcodeDetector' in self) {
@@ -355,36 +546,27 @@
     if (!achou()) {
       try {
         const Z = await zxing();
-        const c = desenhar(src, 3200);
-        const img = c.getContext('2d').getImageData(0, 0, c.width, c.height);
-        for (const r of await Z.readBarcodes(img, { formats: ['QRCode', 'Code128'], tryHarder: true, maxNumberOfSymbols: 4 })) textos.push(r.text);
+        for (const c of [desenhar(src, 3200), plano]) {
+          if (!c || achou()) continue;
+          const img = c.getContext('2d').getImageData(0, 0, c.width, c.height);
+          for (const r of await Z.readBarcodes(img, { formats: ['QRCode', 'Code128'], tryHarder: true, maxNumberOfSymbols: 4 })) textos.push(r.text);
+        }
       } catch (e) { if (e?.code === 'sem-rede' || !navigator.onLine) semRede = true; }
     }
     return { textos, semRede };
   }
-  // tons de cinza e contraste: ajuda o OCR em foto de cupom térmico
-  function prepararOcr(src) {
-    const c = desenhar(src, 2200), ctx = c.getContext('2d', { willReadFrequently: true });
-    const img = ctx.getImageData(0, 0, c.width, c.height), d = img.data, hist = new Uint32Array(256);
-    for (let i = 0; i < d.length; i += 4) { const y = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000 | 0; d[i] = y; hist[y]++; }
-    const tot = d.length / 4; let a = 0, lo = 0, hi = 255;
-    for (let i = 0; i < 256; i++) { a += hist[i]; if (a > tot * 0.01) { lo = i; break; } }
-    a = 0; for (let i = 255; i >= 0; i--) { a += hist[i]; if (a > tot * 0.01) { hi = i; break; } }
-    const k = hi > lo ? 255 / (hi - lo) : 1;
-    for (let i = 0; i < d.length; i += 4) { const y = Math.max(0, Math.min(255, (d[i] - lo) * k)); d[i] = d[i + 1] = d[i + 2] = y; }
-    ctx.putImageData(img, 0, 0);
-    return c;
-  }
   async function doImagem(src, prog) {
     prog?.('codigo');
-    const cod = await lerCodigos(src);
+    // a folha endireitada, sem o fundo, com a luz igualada e ampliada: é nela que o OCR lê
+    const plano = folhaPlana(src, 2800);
+    const cod = await lerCodigos(src, plano);
     let base = {};
     for (const t of cod.textos) { const x = doCodigo(t); if (x.chave) { base = x; break; } }
     prog?.('ocr');
     let P = null, texto = '', pendente = false;
     try {
       const w = await tesseract();
-      const { data } = await w.recognize(prepararOcr(src), {}, { text: true, blocks: true });
+      const { data } = await w.recognize(plano, {}, { text: true, blocks: true });
       soltarTess();
       texto = data.text || '';
       const linhas = [];
@@ -545,5 +727,5 @@
     } catch {} finally { preparando = false; }
   }
 
-  window.NotaFiscal = { ler, nomeCnpj, preparar, info, formatarChave, chaveValida, cnpjOk, digitos, mesmoNome, _doCodigo: doCodigo, _doXml: doXml, _frases: frases, _analisar: analisar };
+  window.NotaFiscal = { ler, nomeCnpj, preparar, info, formatarChave, chaveValida, cnpjOk, digitos, mesmoNome, _doCodigo: doCodigo, _doXml: doXml, _frases: frases, _analisar: analisar, _folhaPlana: folhaPlana, _acharFolha: acharFolha };
 })();
