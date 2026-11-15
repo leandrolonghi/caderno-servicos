@@ -2963,7 +2963,9 @@ const REPORTS = {
     const pagas = fats().filter(f => f.status === 'paga' && inR(f.pagoEm)).sort(por('pagoEm'));
     const gs = gastosR().sort(por('data')), tg = soma(gs, 'valor');
     const nf = f => f.nf?.status === 'emitida' && f.nf.numero ? 'NF ' + f.nf.numero : NFST[f.nf?.status || 'pendente'];
-    const linha = (g, chave) => [fmtDate(g.data), g.fornecedor || '', g.nf || '', chave, brl(g.valor)];
+    const linha = (g, chave) => [fmtDate(g.data), g.fornecedor || '', g.nf || '', g.pagamento || '', chave, brl(g.valor)];
+    // total de cada forma de pagamento (as sem forma ficam em "Não informado")
+    const formas = [...PAGTOS, ''].map(k => [k || 'Não informado', soma(gs.filter(g => (PAGTOS.includes(g.pagamento) ? g.pagamento : '') === k), 'valor'), gs.some(g => (PAGTOS.includes(g.pagamento) ? g.pagamento : '') === k)]).filter(f => f[2]);
     const qtd = (q, um, varios) => `${q} ${q === 1 ? um : varios}`;
     return {
       resumo: [['Faturas emitidas', brl(soma(validas))], ['Recebido', brl(soma(pagas))], ['Despesas', brl(tg)]],
@@ -2975,12 +2977,13 @@ const REPORTS = {
           info: `${qtd(pagas.length, 'recebimento', 'recebimentos')} · ${brl(soma(pagas))}`,
           rows: pagas.map(f => [fatLabel(f), fmtDate(f.pagoEm), cli(f), f.forma || '', brl(f.total)]), foot: ['Total', '', '', '', brl(soma(pagas))] },
         // no PDF: a chave vai numa linha própria de cada despesa (para copiar inteira) e o ícone da nota leva à página dela
-        { t: 'Despesas', head: ['Data', 'Fornecedor', 'NF', 'Chave de acesso', 'Valor'], right: [4], vazio: 'Nenhuma despesa no período.',
+        { t: 'Despesas', head: ['Data', 'Fornecedor', 'NF', 'Pagamento', 'Chave de acesso', 'Valor'], right: [5], vazio: 'Nenhuma despesa no período.',
+          sub: { head: ['Forma de pagamento', 'Valor'], right: [1], rows: formas.map(f => [f[0], brl(f[1])]) },
           info: `${qtd(gs.length, 'despesa', 'despesas')} · ${brl(tg)}`,
-          rows: gs.map(g => linha(g, window.NotaFiscal?.formatarChave(g.chave) || g.chave || '')), foot: ['Total', '', '', '', brl(tg)],
+          rows: gs.map(g => linha(g, window.NotaFiscal?.formatarChave(g.chave) || g.chave || '')), foot: ['Total', '', '', '', '', brl(tg)],
           // a planilha não tem falta de espaço: mantém categoria e descrição. ="..." para o Excel não virar a chave em número com expoente
-          csvHead: ['Data', 'Categoria', 'Fornecedor', 'Descrição', 'NF', 'Chave de acesso', 'Valor'], csvFoot: ['Total', '', '', '', '', '', brl(tg)],
-          csv: gs.map(g => [fmtDate(g.data), g.categoria || '', g.fornecedor || '', g.descricao || '', g.nf || '', g.chave ? `="${g.chave}"` : '', brl(g.valor)]), gastos: gs, total: tg }] };
+          csvHead: ['Data', 'Categoria', 'Fornecedor', 'Descrição', 'NF', 'Pagamento', 'Chave de acesso', 'Valor'], csvFoot: ['Total', '', '', '', '', '', '', brl(tg)],
+          csv: gs.map(g => [fmtDate(g.data), g.categoria || '', g.fornecedor || '', g.descricao || '', g.nf || '', g.pagamento || '', g.chave ? `="${g.chave}"` : '', brl(g.valor)]), gastos: gs, total: tg }] };
   } },
   receber: { t: 'Contas a receber', d: 'Faturas em aberto e vencidas (todas as datas)', all: true, build() {
     const { clientes } = D(), l = fats().filter(f => f.status === 'aberta').sort((x, y) => (x.vencimento || '').localeCompare(y.vencimento || ''));
@@ -3005,7 +3008,8 @@ function renderReport(body, k) {
   const temDados = r.secoes ? r.secoes.some(x => x.rows.length) : r.rows.length;
   if (r.secoes) body.append(
     el('div', { class: 'kpis' }, r.resumo.map(([l, v]) => el('div', { class: 'kpi' }, el('span', {}, l), el('b', {}, v)))),
-    ...r.secoes.map(x => el('div', { class: 'gsec' }, el('h3', {}, x.t), x.rows.length ? tableEl(x.head, x.rows, x.right, x.foot) : el('div', { class: 'empty' }, x.vazio || 'Nada neste período.'))));
+    ...r.secoes.map(x => el('div', { class: 'gsec' }, el('h3', {}, x.t), x.rows.length ? tableEl(x.head, x.rows, x.right, x.foot) : el('div', { class: 'empty' }, x.vazio || 'Nada neste período.'),
+      x.rows.length && x.sub && tableEl(x.sub.head, x.sub.rows, x.sub.right))));
   else body.append(r.rows.length ? tableEl(r.head, r.rows, r.right, r.foot) : el('div', { class: 'empty' }, 'Nada registrado neste período.'));
   body.append(el('div', { class: 'gactions' },
     el('button', { type: 'button', class: 'primary', disabled: !temDados, onclick: () => reportPdf(R, r) }, 'Baixar PDF'),
@@ -3015,7 +3019,7 @@ const slug = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, 
 function reportCsv(R, r) {
   const q = v => { const x = String(v ?? ''); return /[";\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x; };
   const tab = x => [x.csvHead || x.head, ...(x.csv || x.rows), ...(x.foot ? [x.csvFoot || x.foot] : [])];
-  const lines = (r.secoes ? [...r.resumo, [], ...r.secoes.flatMap(x => [[x.t.toUpperCase()], ...(x.rows.length ? tab(x) : [['Nada neste período']]), []])] : tab(r)).map(l => l.map(q).join(';'));
+  const lines = (r.secoes ? [...r.resumo, [], ...r.secoes.flatMap(x => [[x.t.toUpperCase()], ...(x.rows.length ? tab(x) : [['Nada neste período']]), [], ...(x.rows.length && x.sub ? [x.sub.head, ...x.sub.rows, []] : [])])] : tab(r)).map(l => l.map(q).join(';'));
   saveFile(`${slug(R.t)}-${R.all ? today() : slug(perTxt())}.csv`, '﻿' + lines.join('\r\n'));
 }
 
@@ -3113,12 +3117,12 @@ function iconeNota(doc, x, y) {
   doc.setFont('helvetica', 'bold'); doc.setFontSize(4.8); doc.setTextColor(255, 255, 255); doc.text('NF', x + w / 2, y + h - 1.3, { align: 'center' });
 }
 function tabelaGastos(ctx, x) {
-  const { doc, M } = ctx, gs = x.gastos, CH = 5.6, NOTA = 3;
+  const { doc, M, W } = ctx, gs = x.gastos, CH = 5.6, NOTA = 4;
   x.links = [];
-  ctx.table(['Data', 'Fornecedor', 'NF', 'Nota', 'Valor'],
-    gs.map(g => [fmtDate(g.data), g.fornecedor || '', g.nf || '', temNota(g) ? '' : '-', brl(g.valor)]),
-    [4], ['Total', '', '', '', brl(x.total)], {
-      rowPageBreak: 'avoid', columnStyles: { 0: { cellWidth: 'wrap' }, 2: { cellWidth: 'wrap' }, 3: { cellWidth: 'wrap', halign: 'center' } },
+  ctx.table(['Data', 'Fornecedor', 'NF', 'Pagamento', 'Nota', 'Valor'],
+    gs.map(g => [fmtDate(g.data), g.fornecedor || '', g.nf || '', g.pagamento || '-', temNota(g) ? '' : '-', brl(g.valor)]),
+    [5], ['Total', '', '', '', '', brl(x.total)], {
+      rowPageBreak: 'avoid', columnStyles: { 0: { cellWidth: 'wrap' }, 2: { cellWidth: 'wrap' }, 3: { cellWidth: 'wrap' }, 4: { cellWidth: 'wrap', halign: 'center' } },
       didParseCell: d => {
         if (d.column.index === NOTA) d.cell.styles.halign = 'center';
         if (d.section !== 'body') return;
@@ -3133,7 +3137,7 @@ function tabelaGastos(ctx, x) {
           iconeNota(doc, c.x + c.width / 2 - 2.1, c.y + 1.6);
           x.links.push({ id: g.id, pg: doc.internal.getCurrentPageInfo().pageNumber, x: c.x, y: c.y, w: c.width, h: c.height });
         }
-        if (d.column.index === 4 && g.chave) {
+        if (d.column.index === 5 && g.chave) {
           const y = c.y + c.height - 3.6;
           doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...MUT); doc.text('CHAVE DE ACESSO', M + 2.8, y);
           const lx = M + 2.8 + doc.getTextWidth('CHAVE DE ACESSO') + 2.5;
@@ -3142,6 +3146,8 @@ function tabelaGastos(ctx, x) {
       },
     });
   x.pgTabela = x.links[0]?.pg || doc.getNumberOfPages();
+  // no fim da tabela: o total de cada forma de pagamento, à direita
+  if (x.sub?.rows.length) { ctx.y -= 2; ctx.table(x.sub.head, x.sub.rows, x.sub.right, null, { tableWidth: 80, margin: { left: W - M - 80, right: M, bottom: 18 }, rowPageBreak: 'avoid' }); }
 }
 // páginas com as notas das despesas (foto, PDF ou os dados do XML); o ícone da tabela aponta para cá
 async function anexarNotas(ctx, x) {
@@ -3417,6 +3423,7 @@ function gravarGasto(id, x) {
   const c = catsG().find(c => c.nome === x.categoria);
   return store.doc('gastos/' + id).set({ ...x, valor: n(x.valor), carro: c ? !!c.carro : !!x.carro, criadoEm: D().gastos[id]?.criadoEm || x.criadoEm || Date.now(), atualizadoEm: Date.now() });
 }
+const PAGTOS = ['Pix', 'Cartão', 'Boleto', 'Dinheiro'];
 const gTemAlgo = x => !!(n(x.valor) || x.descricao || x.foto || x.arquivo || x.fornecedor || x.chave || x.nf);
 // muda o gasto aberto na tela (e salva) ou o gasto guardado
 function mexerGasto(id, fn, base) {
@@ -3466,7 +3473,7 @@ async function lerNota(id, arquivo, base, op = {}) {
   if (!forn && cnpj) { forn = await NotaFiscal.nomeCnpj(cnpj); if (eu(forn)) forn = ''; }
   const faltaNome = !forn && !!cnpj && !navigator.onLine;
   if (!forn && r.fornecedorPalpite && !eu(r.fornecedorPalpite)) forn = r.fornecedorPalpite;
-  const campos = { fornecedor: forn, data: r.data, nf: r.numero, chave: r.chave, valor: r.valor, cnpj, categoria: catsG().some(c => c.nome === ant?.categoria) ? ant.categoria : null };
+  const campos = { fornecedor: forn, data: r.data, nf: r.numero, chave: r.chave, valor: r.valor, cnpj, pagamento: r.pagamento, categoria: catsG().some(c => c.nome === ant?.categoria) ? ant.categoria : null };
   mexerGasto(id, x => {
     preencherNota(x, campos);
     if (r.pendente) x.notaPendente = 'ler'; else if (faltaNome) x.notaPendente = 'nome'; else delete x.notaPendente;
@@ -3549,11 +3556,16 @@ function renderGasto(body, id) {
     } }, 'Ler nota'));
   };
   const fmtChave = c => window.NotaFiscal?.formatarChave(c) || c || '';
+  // forma de pagamento: toque de novo na escolhida para tirar
+  const pag = el('div', { class: 'chips', role: 'group', 'aria-label': 'Forma de pagamento' });
+  const drawPag = () => pag.replaceChildren(...PAGTOS.map(k => el('button', { type: 'button', class: 'chip', 'aria-pressed': String(g.pagamento === k),
+    onclick: () => { g.pagamento = g.pagamento === k ? '' : k; drawPag(); save(); } }, k)));
+  drawPag();
   const sync = () => {
     const set = (sel, v, igual = (a, b) => String(a) === String(b)) => { const i = $(sel); if (i && !igual(i.value, v)) i.value = v; };
     set('#gValor', g.valor === '' || g.valor == null ? '' : n(g.valor), (a, b) => (a === '' && b === '') || (a !== '' && b !== '' && n(a) === n(b)));
     set('#gData', g.data || today()); set('#gCat', g.categoria || ''); set('#gForn', g.fornecedor || ''); set('#gNF', g.nf || ''); set('#gChave', fmtChave(g.chave), (a, b) => a.replace(/\D/g, '') === String(b).replace(/\D/g, ''));
-    drawFoto();
+    drawFoto(); drawPag();
   };
   gForm = { id, g, save, sync };
   drawFoto();
@@ -3562,6 +3574,7 @@ function renderGasto(body, id) {
     el('div', { class: 'grid2' },
       el('label', { class: 'f', for: 'gData' }, 'Data', el('input', { id: 'gData', type: 'date', value: g.data || today(), onchange: e => { g.data = e.target.value || today(); save(); } })),
       el('label', { class: 'f', for: 'gCat' }, 'Categoria', el('select', { id: 'gCat', onchange: e => { g.categoria = e.target.value; save(); } }, opts.map(c => el('option', { value: c.nome, selected: c.nome === g.categoria }, c.nome))))),
+    el('div', { class: 'f' }, 'Pagamento', pag),
     el('label', { class: 'f', for: 'gForn' }, 'Fornecedor', el('input', { id: 'gForn', value: g.fornecedor || '', autocomplete: 'off', oninput: e => { g.fornecedor = e.target.value.trim(); kick(); } })),
     el('label', { class: 'f', for: 'gDesc' }, 'Descrição', el('input', { id: 'gDesc', value: g.descricao || '', oninput: e => { g.descricao = e.target.value.trim(); kick(); } })),
     el('div', { class: 'f' }, 'Comprovante', foto),
