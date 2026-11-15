@@ -3323,6 +3323,8 @@ function preencherNota(x, campos) {
   x.auto = auto;
 }
 const normNome = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+// o nome é da própria empresa (quem comprou), não do fornecedor
+const euMesmo = (nome, cfg = D().cfg) => { const a = normNome(nome); return !a || [cfg.nome, razaoSocial(cfg)].some(b => b && (normNome(b) === a || window.NotaFiscal?.mesmoNome(b, nome))); };
 const cnpjGasto = g => g.cnpj || window.NotaFiscal?.info(g.chave)?.cnpj || '';
 // o mesmo fornecedor já lançado: usa o nome e a categoria que você deixou da última vez
 function gastoPorCnpj(cnpj, exceto) {
@@ -3334,7 +3336,8 @@ async function lerNota(id, arquivo, base, op = {}) {
   if (!window.NotaFiscal || !arquivo || lendoNota[id]) return;
   lendoNota[id] = true; if (gAberto(id)) gForm.sync();
   let r = null, erro = null;
-  try { r = await NotaFiscal.ler(arquivo); } catch (e) { erro = e; console.warn('Leitura da nota', e); }
+  const cfg = D().cfg;
+  try { r = await NotaFiscal.ler(arquivo, { meuCnpj: cfg.cnpj, meusNomes: [cfg.nome, razaoSocial(cfg)] }); } catch (e) { erro = e; console.warn('Leitura da nota', e); }
   lendoNota[id] = false;
   if (erro) {
     const pend = erro.code === 'sem-rede';
@@ -3342,12 +3345,12 @@ async function lerNota(id, arquivo, base, op = {}) {
     if (!op.silencioso) toast(pend ? 'Sem internet para ler a nota agora. Ela será lida quando houver sinal.' : 'Não deu para ler a nota. Preencha à mão.');
     return;
   }
-  const cfg = D().cfg, meu = NotaFiscal.digitos(cfg.cnpj), eu = nome => { const a = normNome(nome); return !a || [cfg.nome, razaoSocial(cfg)].some(b => b && normNome(b) === a); };
+  const meu = NotaFiscal.digitos(cfg.cnpj), eu = nome => euMesmo(nome, cfg);
   const cnpj = r.cnpj && r.cnpj !== meu ? r.cnpj : '';
   const ant = cnpj ? gastoPorCnpj(cnpj, id) : null;
   let forn = ant?.fornecedor || '';
   if (!forn && r.fornecedor && !eu(r.fornecedor)) forn = r.fornecedor;
-  if (!forn && cnpj) forn = await NotaFiscal.nomeCnpj(cnpj);
+  if (!forn && cnpj) { forn = await NotaFiscal.nomeCnpj(cnpj); if (eu(forn)) forn = ''; }
   const faltaNome = !forn && !!cnpj && !navigator.onLine;
   if (!forn && r.fornecedorPalpite && !eu(r.fornecedorPalpite)) forn = r.fornecedorPalpite;
   const campos = { fornecedor: forn, data: r.data, nf: r.numero, chave: r.chave, valor: r.valor, cnpj, categoria: catsG().some(c => c.nome === ant?.categoria) ? ant.categoria : null };
@@ -3371,7 +3374,7 @@ async function lerPendentes() {
       if (!g.notaPendente || lendoNota[g.id] || Date.now() - (pendTentou[g.id] || 0) < 300000) continue;
       pendTentou[g.id] = Date.now();
       if (g.notaPendente === 'nome') {
-        const nome = g.cnpj ? await NotaFiscal.nomeCnpj(g.cnpj) : '';
+        let nome = g.cnpj ? await NotaFiscal.nomeCnpj(g.cnpj) : ''; if (euMesmo(nome)) nome = '';
         if (navigator.onLine) mexerGasto(g.id, x => { if (nome) preencherNota(x, { fornecedor: nome }); delete x.notaPendente; });
       } else {
         const b = notaOrig[g.id] || await CS.blobOf(g.foto || g.arquivo).catch(() => null);
@@ -3451,7 +3454,7 @@ function renderGasto(body, id) {
     el('div', { class: 'f' }, 'Comprovante', foto),
     el('div', { class: 'grid2 gnf' },
       el('label', { class: 'f', for: 'gNF' }, 'Número da NF', el('input', { id: 'gNF', inputmode: 'numeric', autocomplete: 'off', value: g.nf || '', oninput: e => { g.nf = e.target.value.trim(); kick(); } })),
-      el('label', { class: 'f', for: 'gChave' }, 'Chave de acesso', el('input', { id: 'gChave', inputmode: 'numeric', autocomplete: 'off', value: fmtChave(g.chave), oninput: e => { g.chave = e.target.value.replace(/\D/g, '').slice(0, 44); if (g.chave.length === 44) { const i = window.NotaFiscal?.info(g.chave); if (i && !g.cnpj) g.cnpj = i.cnpj; } kick(); }, onchange: e => { e.target.value = fmtChave(g.chave); } }))));
+      el('label', { class: 'f', for: 'gChave' }, 'Chave de acesso', el('input', { id: 'gChave', inputmode: 'numeric', autocomplete: 'off', value: fmtChave(g.chave), oninput: e => { g.chave = e.target.value.replace(/\D/g, '').slice(0, 50); if (window.NotaFiscal?.chaveValida(g.chave)) { const i = NotaFiscal.info(g.chave); if (i?.cnpj && !g.cnpj) g.cnpj = i.cnpj; } kick(); }, onchange: e => { e.target.value = fmtChave(g.chave); } }))));
   if (saved) {
     const del = el('button', { type: 'button', class: 'danger', onclick: e => {
       const b = e.currentTarget;
