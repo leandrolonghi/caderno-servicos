@@ -714,6 +714,29 @@
     return nome.trim();
   }
 
+  /* ---------- notas no relatório do contador ---------- */
+  // páginas de um PDF como imagens (canvas)
+  async function paginasPdf(arquivo, { max = 3, largura = 1600 } = {}) {
+    const lib = await pdfjs();
+    const doc = await lib.getDocument({ data: new Uint8Array(await arquivo.arrayBuffer()), isEvalSupported: false, useSystemFonts: true, stopAtErrors: false, wasmUrl: PDFJS + 'wasm/' }).promise;
+    const out = [];
+    try {
+      for (let i = 1; i <= Math.min(max, doc.numPages); i++) {
+        const pg = await doc.getPage(i), vp = pg.getViewport({ scale: Math.min(4, largura / pg.getViewport({ scale: 1 }).width) });
+        const c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+        const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+        await pg.render({ canvasContext: ctx, canvas: c, viewport: vp }).promise;
+        out.push(c);
+      }
+    } finally { doc.destroy?.(); }
+    return out;
+  }
+  // foto da nota como se fosse escaneada (folha recortada, reta e com a luz igual); a foto como está se não achar a folha
+  async function fotoLimpa(arquivo, max = 2200) {
+    const bmp = await createImageBitmap(arquivo);
+    try { const c = folhaPlana(bmp, max); return c.folha ? c : desenhar(bmp, max); } finally { bmp.close?.(); }
+  }
+
   /* baixa o leitor com internet para funcionar depois sem sinal (uma vez por versão) */
   let preparando = false;
   async function preparar() {
@@ -727,5 +750,5 @@
     } catch {} finally { preparando = false; }
   }
 
-  window.NotaFiscal = { ler, nomeCnpj, preparar, info, formatarChave, chaveValida, cnpjOk, digitos, mesmoNome, _doCodigo: doCodigo, _doXml: doXml, _frases: frases, _analisar: analisar, _folhaPlana: folhaPlana, _acharFolha: acharFolha };
+  window.NotaFiscal = { ler, nomeCnpj, preparar, paginasPdf, fotoLimpa, info, formatarChave, chaveValida, cnpjOk, digitos, mesmoNome, _doCodigo: doCodigo, _doXml: doXml, _frases: frases, _analisar: analisar, _folhaPlana: folhaPlana, _acharFolha: acharFolha };
 })();
