@@ -2959,16 +2959,14 @@ const REPORTS = {
   } },
   contador: { t: 'Relatório Contabilidade', d: 'Faturamento, notas, recebimentos e despesas do período, com as notas fiscais das despesas', build() {
     const { clientes } = D(), cli = f => clientes[f.clienteId]?.nome || '', soma = (l, k = 'total') => l.reduce((s, x) => s + n(x[k]), 0), por = k => (x, y) => (x[k] || '').localeCompare(y[k] || '');
-    const os = osDone(), serv = os.reduce((s, a) => s + calc(a).total, 0);
     const emit = fats().filter(f => inR(f.emissao)).sort(por('emissao')), validas = emit.filter(f => f.status !== 'cancelada');
     const pagas = fats().filter(f => f.status === 'paga' && inR(f.pagoEm)).sort(por('pagoEm'));
     const gs = gastosR().sort(por('data')), tg = soma(gs, 'valor');
     const nf = f => f.nf?.status === 'emitida' && f.nf.numero ? 'NF ' + f.nf.numero : NFST[f.nf?.status || 'pendente'];
-    const linha = (g, chave) => [fmtDate(g.data), g.categoria || '', g.fornecedor || '', g.descricao || '', g.nf || '', chave, brl(g.valor)];
+    const linha = (g, chave) => [fmtDate(g.data), g.fornecedor || '', g.nf || '', chave, brl(g.valor)];
     const qtd = (q, um, varios) => `${q} ${q === 1 ? um : varios}`;
     return {
-      resumo: [['Serviços realizados', brl(serv)], ['Faturas emitidas', brl(soma(validas))], ['Recebido', brl(soma(pagas))], ['Despesas', brl(tg)],
-        ['Resultado (serviços menos despesas)', brl(serv - tg)]],
+      resumo: [['Faturas emitidas', brl(soma(validas))], ['Recebido', brl(soma(pagas))], ['Despesas', brl(tg)]],
       secoes: [
         { t: 'Faturas emitidas', head: ['Fatura', 'Emissão', 'Cliente', 'Nota fiscal', 'Situação', 'Valor'], right: [5], vazio: 'Nenhuma fatura emitida no período.',
           info: `${qtd(emit.length, 'fatura', 'faturas')} · ${brl(soma(validas))}`,
@@ -2976,12 +2974,13 @@ const REPORTS = {
         { t: 'Recebimentos', head: ['Fatura', 'Pago em', 'Cliente', 'Forma', 'Valor'], right: [4], vazio: 'Nenhum recebimento no período.',
           info: `${qtd(pagas.length, 'recebimento', 'recebimentos')} · ${brl(soma(pagas))}`,
           rows: pagas.map(f => [fatLabel(f), fmtDate(f.pagoEm), cli(f), f.forma || '', brl(f.total)]), foot: ['Total', '', '', '', brl(soma(pagas))] },
-        // no PDF: a chave vai numa linha própria de cada despesa (para copiar inteira) e "Ver nota" leva à página da nota
-        { t: 'Despesas', head: ['Data', 'Categoria', 'Fornecedor', 'Descrição', 'NF', 'Chave de acesso', 'Valor'], right: [6], vazio: 'Nenhuma despesa no período.',
+        // no PDF: a chave vai numa linha própria de cada despesa (para copiar inteira) e o ícone da nota leva à página dela
+        { t: 'Despesas', head: ['Data', 'Fornecedor', 'NF', 'Chave de acesso', 'Valor'], right: [4], vazio: 'Nenhuma despesa no período.',
           info: `${qtd(gs.length, 'despesa', 'despesas')} · ${brl(tg)}`,
-          rows: gs.map(g => linha(g, window.NotaFiscal?.formatarChave(g.chave) || g.chave || '')), foot: ['Total', '', '', '', '', '', brl(tg)],
-          // na planilha, ="..." para o Excel não virar a chave em número com expoente
-          csv: gs.map(g => linha(g, g.chave ? `="${g.chave}"` : '')), gastos: gs, total: tg }] };
+          rows: gs.map(g => linha(g, window.NotaFiscal?.formatarChave(g.chave) || g.chave || '')), foot: ['Total', '', '', '', brl(tg)],
+          // a planilha não tem falta de espaço: mantém categoria e descrição. ="..." para o Excel não virar a chave em número com expoente
+          csvHead: ['Data', 'Categoria', 'Fornecedor', 'Descrição', 'NF', 'Chave de acesso', 'Valor'], csvFoot: ['Total', '', '', '', '', '', brl(tg)],
+          csv: gs.map(g => [fmtDate(g.data), g.categoria || '', g.fornecedor || '', g.descricao || '', g.nf || '', g.chave ? `="${g.chave}"` : '', brl(g.valor)]), gastos: gs, total: tg }] };
   } },
   receber: { t: 'Contas a receber', d: 'Faturas em aberto e vencidas (todas as datas)', all: true, build() {
     const { clientes } = D(), l = fats().filter(f => f.status === 'aberta').sort((x, y) => (x.vencimento || '').localeCompare(y.vencimento || ''));
@@ -3015,14 +3014,14 @@ function renderReport(body, k) {
 const slug = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
 function reportCsv(R, r) {
   const q = v => { const x = String(v ?? ''); return /[";\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x; };
-  const tab = x => [x.head, ...(x.csv || x.rows), ...(x.foot ? [x.foot] : [])];
+  const tab = x => [x.csvHead || x.head, ...(x.csv || x.rows), ...(x.foot ? [x.csvFoot || x.foot] : [])];
   const lines = (r.secoes ? [...r.resumo, [], ...r.secoes.flatMap(x => [[x.t.toUpperCase()], ...(x.rows.length ? tab(x) : [['Nada neste período']]), []])] : tab(r)).map(l => l.map(q).join(';'));
   saveFile(`${slug(R.t)}-${R.all ? today() : slug(perTxt())}.csv`, '﻿' + lines.join('\r\n'));
 }
 
 /* ---------- PDF (mesmo cabeçalho da OS) ---------- */
 const INK = [29, 33, 28], MUT = [93, 101, 91], LINE = [214, 217, 209], YEL = [254, 192, 4], ZEBRA = [246, 247, 244];
-function pdfBase(kind, label, subline, landscape, { contato = true } = {}) {
+function pdfBase(kind, label, subline, landscape, { contato = true, titulo = label.length > 14 ? 13 : 18 } = {}) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: landscape ? 'landscape' : 'portrait' });
   const W = doc.internal.pageSize.getWidth(), M = 14, cfg = D().cfg;
@@ -3030,13 +3029,14 @@ function pdfBase(kind, label, subline, landscape, { contato = true } = {}) {
   doc.addImage(LOGO_FULL, 'JPEG', M - 2, 2, 33.8, 26);
   const emp = [cfg.cnpj && `CNPJ ${cfg.cnpj}`, ...(contato ? [[cfg.telefone, cfg.email].filter(Boolean).join(' · '), cfg.endereco] : [])].filter(Boolean);
   doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold');
-  doc.setFontSize(label.length > 14 ? 13 : 18); const lw = doc.getTextWidth(label); // o nome da empresa não pode encostar no título à direita
+  doc.setFontSize(titulo); const lw = doc.getTextWidth(label); // o nome da empresa não pode encostar no título à direita
   pdfNome(doc, razaoSocial(cfg), 56, emp.length ? 11 : 16, Math.min(96, W - M - lw - 5 - 56));
   doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(220, 220, 220);
   emp.slice(0, 3).forEach((l, i) => doc.text(doc.splitTextToSize(l, 88)[0], 56, 16.5 + i * 4.4));
-  doc.setFontSize(7.5); doc.setTextColor(...YEL); doc.text(kind, W - M, 8, { align: 'right' });
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(label.length > 14 ? 13 : 18); doc.text(label, W - M, 14.5, { align: 'right' });
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(255, 255, 255); if (subline) doc.text(subline, W - M, 20.5, { align: 'right' });
+  // sem a palavra do canto (kind vazio), o título sobe e fica na linha do nome da empresa
+  if (kind) { doc.setFontSize(7.5); doc.setTextColor(...YEL); doc.text(kind, W - M, 8, { align: 'right' }); } else doc.setTextColor(...YEL);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(titulo); doc.text(label, W - M, kind ? 14.5 : 11, { align: 'right' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(255, 255, 255); if (subline) doc.text(subline, W - M, kind ? 20.5 : 16.5, { align: 'right' });
   doc.setTextColor(...INK);
   const ctx = { doc, W, M, y: 38, CW: W - 2 * M, H: doc.internal.pageSize.getHeight() };
   ctx.space = h => { if (ctx.y + h > ctx.H - 18) { doc.addPage(); ctx.y = M; } };
@@ -3045,12 +3045,12 @@ function pdfBase(kind, label, subline, landscape, { contato = true } = {}) {
     if (info) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...MUT); doc.text(info, W - M, ctx.y, { align: 'right' }); }
     ctx.y += 5;
   };
-  // números do período em caixas lado a lado; a última (resultado) em destaque
-  ctx.kpis = pairs => {
+  // números do período em caixas lado a lado (destaque: índice da caixa escura, opcional)
+  ctx.kpis = (pairs, destaque = -1) => {
     const q = pairs.length, gap = 3, w = (ctx.CW - gap * (q - 1)) / q, h = 19;
     ctx.space(h + 4);
     pairs.forEach(([l, v], i) => {
-      const x = M + i * (w + gap), d = i === q - 1;
+      const x = M + i * (w + gap), d = i === destaque;
       doc.setFillColor(...(d ? INK : ZEBRA)); doc.roundedRect(x, ctx.y, w, h, 1.2, 1.2, 'F');
       doc.setFont('helvetica', 'normal'); doc.setFontSize(6.8); doc.setTextColor(...(d ? [205, 205, 205] : MUT));
       doc.splitTextToSize(l.toUpperCase(), w - 6).slice(0, 2).forEach((t, j) => doc.text(t, x + 3, ctx.y + 5 + j * 2.9));
@@ -3083,7 +3083,8 @@ async function reportPdf(R, r) {
   if (!window.jspdf?.jsPDF) return toast('O gerador de PDF não carregou. Recarregue o app com internet.');
   const wide = !r.secoes && r.head.length > 6;
   // relatório da contabilidade: o período em datas no cabeçalho, sem telefone/e-mail/endereço, números em caixas
-  const pTxt = periodoTxt(), ctx = pdfBase('RELATÓRIO', R.t, R.all ? fmtDate(today()) : r.secoes ? pTxt[0].toUpperCase() + pTxt.slice(1) : perTxt(), wide, { contato: !r.secoes });
+  const pTxt = periodoTxt(), ctx = r.secoes ? pdfBase('', R.t, pTxt[0].toUpperCase() + pTxt.slice(1), false, { contato: false, titulo: 11 })
+    : pdfBase('RELATÓRIO', R.t, R.all ? fmtDate(today()) : perTxt(), wide);
   if (!r.secoes) ctx.para(R.all ? `Posição em ${fmtDate(today())}` : `Período: ${per === 'tudo' ? 'todos os registros' : perTxt().toLowerCase()} (${pTxt})`, 9, MUT);
   if (r.secoes) {
     ctx.y = 40; ctx.kpis(r.resumo);
@@ -3101,29 +3102,39 @@ async function reportPdf(R, r) {
   await saveFile(`${slug(R.t)}-${R.all ? today() : slug(perTxt())}.pdf`, ctx.doc.output('blob'));
 }
 
-// despesas do relatório da contabilidade: cada linha com a chave embaixo (texto inteiro, para copiar) e "Ver nota" com link
+// despesas do relatório da contabilidade: cada linha com a chave embaixo (texto inteiro, para copiar) e o ícone da nota com link
 const temNota = g => !!(g.foto || g.arquivo);
 const LINK = [29, 92, 199];
+// ícone de nota (folha com a ponta dobrada e "NF"), clicável na tabela de despesas
+function iconeNota(doc, x, y) {
+  const w = 4.2, h = 5.4, f = 1.4;
+  doc.setFillColor(...LINK); doc.lines([[w - f, 0], [f, f], [0, h - f], [-w, 0]], x, y, [1, 1], 'F', true);
+  doc.setFillColor(168, 194, 238); doc.lines([[0, f], [f, 0]], x + w - f, y, [1, 1], 'F', true);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(4.8); doc.setTextColor(255, 255, 255); doc.text('NF', x + w / 2, y + h - 1.3, { align: 'center' });
+}
 function tabelaGastos(ctx, x) {
-  const { doc, M } = ctx, gs = x.gastos, CH = 4.6;
+  const { doc, M } = ctx, gs = x.gastos, CH = 5.6, NOTA = 3;
   x.links = [];
-  ctx.table(['Data', 'Categoria', 'Fornecedor', 'Descrição', 'NF', 'Nota', 'Valor'],
-    gs.map(g => [fmtDate(g.data), g.categoria || '', g.fornecedor || '', g.descricao || '', g.nf || '', temNota(g) ? 'Ver nota' : '-', brl(g.valor)]),
-    [6], ['Total', '', '', '', '', '', brl(x.total)], {
-      rowPageBreak: 'avoid', columnStyles: { 0: { cellWidth: 'wrap' }, 4: { cellWidth: 'wrap' }, 5: { cellWidth: 'wrap' } },
+  ctx.table(['Data', 'Fornecedor', 'NF', 'Nota', 'Valor'],
+    gs.map(g => [fmtDate(g.data), g.fornecedor || '', g.nf || '', temNota(g) ? '' : '-', brl(g.valor)]),
+    [4], ['Total', '', '', '', brl(x.total)], {
+      rowPageBreak: 'avoid', columnStyles: { 0: { cellWidth: 'wrap' }, 2: { cellWidth: 'wrap' }, 3: { cellWidth: 'wrap', halign: 'center' } },
       didParseCell: d => {
+        if (d.column.index === NOTA) d.cell.styles.halign = 'center';
         if (d.section !== 'body') return;
         const g = gs[d.row.index];
         d.cell.styles.valign = 'top';
         if (g.chave) d.cell.styles.cellPadding = { top: 2.4, bottom: 2.4 + CH, left: 2.8, right: 2.8 };
-        if (d.column.index === 5 && temNota(g)) { d.cell.styles.textColor = LINK; d.cell.styles.fontStyle = 'bold'; }
       },
       didDrawCell: d => {
         if (d.section !== 'body') return;
         const g = gs[d.row.index], c = d.cell;
-        if (d.column.index === 5 && temNota(g)) x.links.push({ id: g.id, pg: doc.internal.getCurrentPageInfo().pageNumber, x: c.x, y: c.y, w: c.width, h: c.height });
-        if (d.column.index === 6 && g.chave) {
-          const y = c.y + c.height - 3.4;
+        if (d.column.index === NOTA && temNota(g)) {
+          iconeNota(doc, c.x + c.width / 2 - 2.1, c.y + 1.6);
+          x.links.push({ id: g.id, pg: doc.internal.getCurrentPageInfo().pageNumber, x: c.x, y: c.y, w: c.width, h: c.height });
+        }
+        if (d.column.index === 4 && g.chave) {
+          const y = c.y + c.height - 3.6;
           doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...MUT); doc.text('CHAVE DE ACESSO', M + 2.8, y);
           const lx = M + 2.8 + doc.getTextWidth('CHAVE DE ACESSO') + 2.5;
           doc.setFontSize(9); doc.setTextColor(...INK); doc.text(g.chave, lx, y);
@@ -3132,7 +3143,7 @@ function tabelaGastos(ctx, x) {
     });
   x.pgTabela = x.links[0]?.pg || doc.getNumberOfPages();
 }
-// páginas com as notas dos gastos (foto, PDF ou os dados do XML); "Ver nota" da tabela aponta para cá
+// páginas com as notas das despesas (foto, PDF ou os dados do XML); o ícone da tabela aponta para cá
 async function anexarNotas(ctx, x) {
   const { doc, M, W, H } = ctx, pag = {};
   for (const g of x.gastos.filter(temNota)) {
