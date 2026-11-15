@@ -307,6 +307,7 @@
       const v = l && valorDe(l.slice(norm(l).search(re)));
       if (v) { r.valor = v; break; }
     }
+    if (r.tipo === 'NFC-e' || r.tipo === 'CF-e') r.pagamento = pagamentoDoCupom(plano);
     // fornecedor: a linha antes do primeiro CNPJ (no cupom o emitente vem no alto)
     const cs = r.tipo === 'NFC-e' || r.tipo === 'CF-e' ? cnpjsDe(plano) : [];
     if (cs.length) {
@@ -638,6 +639,9 @@
       if (dest) { r.comprador = val('xNome', dest); r.cnpjComprador = val('CNPJ', dest); }
       const v = +(val('vNF') || val('vCFe')); if (v > 0) r.valor = v;
       r.tipo = r.chave ? info(r.chave).tipo : tag('infCFe') ? 'CF-e' : 'NF-e';
+      // forma de pagamento (tPag na NF-e/NFC-e, cMP no CF-e): só quando é uma forma só
+      const formas = new Set([...raiz.getElementsByTagName('tPag'), ...raiz.getElementsByTagName('cMP')].map(t => PAGTO[t.textContent.trim()]));
+      if (formas.size === 1 && [...formas][0]) r.pagamento = [...formas][0];
       return r;
     }
     // NFS-e padrão nacional (infNFSe, prestador em emit) e municipais mais comuns (ABRASF)
@@ -657,6 +661,23 @@
     return r;
   }
 
+  // códigos de forma de pagamento da NF-e (tPag) e do CF-e (cMP)
+  const PAGTO = { '01': 'Dinheiro', '03': 'Cartão', '04': 'Cartão', '15': 'Boleto', '17': 'Pix' };
+  // cupom (NFC-e/CF-e): a forma vem logo abaixo de "forma de pagamento"; duas formas diferentes = em branco
+  function pagamentoDoCupom(texto) {
+    const ls = String(texto || '').split('\n').map(norm), i = ls.findIndex(l => /forma(s)? (de )?pagamento|forma pagamento/.test(l));
+    if (i < 0) return undefined;
+    const achou = new Set();
+    for (const l of ls.slice(i, i + 5)) {
+      if (/\bpix\b/.test(l)) achou.add('Pix');
+      if (/cart[a-z]*o|credito|debito/.test(l) && !/forma/.test(l)) achou.add('Cartão');
+      if (/boleto/.test(l)) achou.add('Boleto');
+      if (/dinheiro/.test(l)) achou.add('Dinheiro');
+      if (/^troco|^valor total|^tributos/.test(l)) break;
+    }
+    return achou.size === 1 ? [...achou][0] : undefined;
+  }
+
   /* ---------- conferência final: na dúvida, deixa em branco ---------- */
   function conferir(r, opt) {
     const meuCnpj = digitos(opt.meuCnpj), compradores = [r.comprador, ...(opt.meusNomes || [])].filter(Boolean);
@@ -672,6 +693,7 @@
     if (r.numero && !/^\d{1,13}$/.test(r.numero)) r.numero = undefined;
     if (r.data && !datas(r.data.split('-').reverse().join('/')).length) r.data = undefined;
     if (!(r.valor > 0 && r.valor < 1e7)) r.valor = undefined;
+    if (!['Pix', 'Cartão', 'Boleto', 'Dinheiro'].includes(r.pagamento)) r.pagamento = undefined;
     // fornecedor nunca é quem comprou (o destinatário/tomador, ou a própria empresa)
     if (r.fornecedor) { r.fornecedor = r.fonte === 'xml' ? String(r.fornecedor).trim() : limpaNome(r.fornecedor); if (!r.fornecedor || compradores.some(n => mesmoNome(n, r.fornecedor))) r.fornecedor = undefined; }
     if (r.fornecedorPalpite && compradores.some(n => mesmoNome(n, r.fornecedorPalpite))) r.fornecedorPalpite = undefined;
