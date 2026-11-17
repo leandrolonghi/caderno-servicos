@@ -513,6 +513,9 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
         </div>
         <div class="grid2">
           <label class="f" for="sData">Data<input id="sData" type="date" required></label>
+          <label class="f" for="sDataFim">Até<input id="sDataFim" type="date"></label>
+        </div>
+        <div class="grid2">
           <label class="f" for="sHorimetro">Horímetro da máquina<input id="sHorimetro" type="number" inputmode="decimal" step="0.1" min="0"></label>
         </div>
         <div class="idphotos" id="idPhotos"></div>
@@ -669,6 +672,7 @@ const brl = v => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', c
 const n = v => { const x = parseFloat(String(v).replace(',', '.')); return isFinite(x) ? x : 0; };
 const fmtH = h => (Number(h) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' h';
 const fmtDate = d => d ? d.split('-').reverse().join('/') : '';
+const periodoOS = a => fmtDate(a.data) + (a.dataFim > a.data ? ' a ' + fmtDate(a.dataFim) : '');
 const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
@@ -1042,7 +1046,7 @@ function svcCard(a, busca) {
         el('span', { class: 'pill' }, tipoTxt(a.tipo)),
         a.exemplo && el('span', { class: 'pill example' }, 'Exemplo')),
       el('div', { class: 'meta' },
-        el('span', {}, el('b', {}, fmtDate(a.data))),
+        el('span', {}, el('b', {}, periodoOS(a))),
         m && el('span', {}, `${m.tipo} ${m.marca} ${m.modelo}`.trim()),
         el('span', { class: 'num' }, fmtH(a.horas)),
         n(a.km) > 0 && el('span', { class: 'num' }, `${n(a.km)} km`),
@@ -1055,17 +1059,30 @@ function svcCard(a, busca) {
 }
 
 /* ---------- Agenda ----------
-   Calendário do mês com um ponto por OS no dia da data dela (laranja = ainda não finalizada,
-   cinza = finalizada). Tocando no dia, aparecem as OS daquele dia. */
+   Calendário do mês com um ponto por OS em cada dia dela (laranja = ainda não finalizada,
+   cinza = finalizada): da Data até o "Até" e também os dias em que houve apontamento.
+   Tocando no dia, aparecem as OS daquele dia. */
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const SEMANA = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
 const isoDe = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 const osFechada = a => a.status === 'concluido' || a.status === 'faturado';
 const svgDe = h => (t => (t.innerHTML = h, t.content.firstChild))(document.createElement('template'));
 let agMes = today().slice(0, 7), agDia = today();
+function diasDaOS(a) {
+  const s = new Set();
+  if (a.data) {
+    s.add(a.data);
+    if (a.dataFim > a.data) for (let d = new Date(a.data + 'T12:00:00'), i = 0; i < 366; i++) {
+      d.setDate(d.getDate() + 1); const k = isoDe(d.getFullYear(), d.getMonth() + 1, d.getDate());
+      if (k > a.dataFim) break; s.add(k);
+    }
+  }
+  for (const x of a.apontamentos || []) if (x.tipo !== 'pausa') { if (x.ini) s.add(dayOf(x.ini)); if (x.fim) s.add(dayOf(x.fim)); }
+  return s;
+}
 function osPorDia() {
   const r = {};
-  for (const a of Object.values(atend)) if (a.data) (r[a.data] = r[a.data] || []).push(a);
+  for (const a of Object.values(atend)) for (const d of diasDaOS(a)) (r[d] = r[d] || []).push(a);
   for (const k in r) r[k].sort((x, y) => osFechada(x) - osFechada(y) || (x.numero || 0) - (y.numero || 0));
   return r;
 }
@@ -1226,7 +1243,7 @@ function openSvc(id, preset = {}) {
   fillClientSelect($('#sCliente'), a.clienteId, 'Escolha o cliente');
   fillMachSelect(a.clienteId, a.maquinaId);
   fillTipoSelect(a.tipo); fillCatSelect(a.categoria || ''); setStatus(a.status || 'aberto');
-  $('#sData').value = a.data || today(); $('#sIni').value = a.inicio || ''; $('#sFim').value = a.fim || '';
+  $('#sData').value = a.data || today(); $('#sDataFim').value = a.dataFim > $('#sData').value ? a.dataFim : ''; $('#sDataFim').min = $('#sData').value; $('#sIni').value = a.inicio || ''; $('#sFim').value = a.fim || '';
   $('#sHoras').value = a.horas ?? ''; $('#sKm').value = a.km ?? ''; $('#sHorimetro').value = a.horimetro ?? '';
   $('#sDesc').value = a.descricao || ''; $('#sObsCli').value = a.recomendacao || '';
   $('#sProblema').value = a.problema || ''; $('#sCausa').value = a.causa || '';
@@ -1243,6 +1260,9 @@ function openSvc(id, preset = {}) {
 $('#sCliente').addEventListener('change', e => { fillMachSelect(e.target.value, ''); renderHist(); });
 $('#sMaquina').addEventListener('change', renderHist);
 $('#sData').addEventListener('change', renderHist);
+// serviço de mais de um dia: "Até" nunca antes da data de início
+$('#sData').addEventListener('change', () => { const d = $('#sData').value; $('#sDataFim').min = d; if ($('#sDataFim').value && $('#sDataFim').value <= d) $('#sDataFim').value = ''; });
+$('#sDataFim').addEventListener('change', () => { const f = $('#sDataFim').value; if (f && f < $('#sData').value) { toast('O término não pode ser antes da data de início'); $('#sDataFim').value = ''; } else if (f === $('#sData').value) $('#sDataFim').value = ''; });
 /* Garantia: serviço finalizado na mesma máquina dentro do prazo (Ajustes › Valores, padrão 90 dias) */
 const garantiaDias = () => cfg.garantiaDias == null || cfg.garantiaDias === '' ? 90 : n(cfg.garantiaDias);
 function emGarantia(mid, data, semId) {
@@ -1937,7 +1957,7 @@ async function saveSvc(close, silent) {
   const id = editingSvc || newId(), prev = atend[id] || {};
   const data = { ...prev, id, ...formSvc(),
     clienteId: $('#sCliente').value, maquinaId: $('#sMaquina').value, tipo: $('#sTipo').value, status: $('#sStatus').value,
-    data: $('#sData').value, inicio: $('#sIni').value, fim: $('#sFim').value, horimetro: $('#sHorimetro').value ? n($('#sHorimetro').value) : null,
+    data: $('#sData').value, dataFim: $('#sDataFim').value > $('#sData').value ? $('#sDataFim').value : null, inicio: $('#sIni').value, fim: $('#sFim').value, horimetro: $('#sHorimetro').value ? n($('#sHorimetro').value) : null,
     categoria: $('#sCat').value, problema: $('#sProblema').value.trim(), causa: $('#sCausa').value.trim(), fotosProblema: fotosProb,
     testes: testes.filter(x => x.desc.trim() || x.fotos.length).map(x => ({ desc: x.desc.trim(), fotos: x.fotos })),
     descricao: $('#sDesc').value.trim(), recomendacao: $('#sObsCli').value.trim(),
@@ -1974,6 +1994,8 @@ $('#fab').onclick = () => {
   const tipo = el('select', { id: 'qTipo' }, el('option', { value: '' }, tipos().length ? 'Escolha o tipo de serviço' : 'Cadastre em Ajustes'), ...tipos().map(t => el('option', { value: t }, t)));
   const falha = el('textarea', { id: 'qFalha', rows: 3, placeholder: 'Ex.: Trator perdendo força em carga' });
   const dataOS = el('input', { id: 'qData', type: 'date', value: !$('#v-agenda').hidden ? agDia : today() });
+  const dataFim = el('input', { id: 'qDataFim', type: 'date', min: dataOS.value });
+  dataOS.addEventListener('change', () => { dataFim.min = dataOS.value; if (dataFim.value && dataFim.value <= dataOS.value) dataFim.value = ''; });
   const garInfo = el('div', { class: 'orcst warn small', hidden: true });
   const fillGar = () => { const d = dataOS.value || today(), g = emGarantia(maq.value, d); garInfo.hidden = !g; garInfo.textContent = g ? garantiaTxt(g, d) : ''; };
   maq.addEventListener('change', fillGar); dataOS.addEventListener('change', fillGar);
@@ -2013,7 +2035,7 @@ $('#fab').onclick = () => {
       el('label', { class: 'f', for: 'qBusca' }, 'Cliente', busca), sel, res,
       el('label', { class: 'f', for: 'qMaquina' }, 'Máquina', maq), garInfo,
       el('label', { class: 'f', for: 'qTipo' }, 'Tipo de serviço', tipo),
-      el('label', { class: 'f', for: 'qData' }, 'Data', dataOS),
+      el('div', { class: 'grid2' }, el('label', { class: 'f', for: 'qData' }, 'Data', dataOS), el('label', { class: 'f', for: 'qDataFim' }, 'Até', dataFim)),
       el('label', { class: 'f', for: 'qFalha' }, 'Falha', falha),
       el('div', { class: 'row', style: 'justify-content:flex-end' },
         el('button', { type: 'button', class: 'ghost', onclick: close }, 'Cancelar'),
@@ -2022,7 +2044,8 @@ $('#fab').onclick = () => {
           if (!maq.disabled && !maq.value) return toast('Escolha a máquina');
           if (tipos().length && !tipo.value) return toast('Escolha o tipo de serviço');
           if (!falha.value.trim()) return toast('Descreva a falha');
-          close(); openSvc(null, { clienteId: cid, maquinaId: maq.value || '', tipo: tipo.value, problema: falha.value.trim(), data: dataOS.value || today() });
+          if (dataFim.value && dataFim.value < (dataOS.value || today())) return toast('O término não pode ser antes da data de início');
+          close(); openSvc(null, { clienteId: cid, maquinaId: maq.value || '', tipo: tipo.value, problema: falha.value.trim(), data: dataOS.value || today(), dataFim: dataFim.value > (dataOS.value || today()) ? dataFim.value : null });
           svcAuto.kick(); await svcAuto.flush();
         } }, 'Criar OS'))));
   document.body.append(ov); requestAnimationFrame(() => busca.focus());
@@ -2177,13 +2200,13 @@ async function buildPdf(a, orc = false) {
   doc.setFontSize(7.5); doc.setTextColor(254, 192, 4); doc.text(orc ? 'ORÇAMENTO' : 'ORDEM DE SERVIÇO', W - M, 8, { align: 'right' });
   doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(254, 192, 4); doc.text(osLabel(a) || 'OS', W - M, 14, { align: 'right' });
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(255, 255, 255);
-  doc.text(orc ? new Date(env.em).toLocaleDateString('pt-BR') : `${fmtDate(a.data)} · ${STATUS[a.status] || ''}`, W - M, 20, { align: 'right' });
+  doc.text(orc ? new Date(env.em).toLocaleDateString('pt-BR') : `${periodoOS(a)} · ${STATUS[a.status] || ''}`, W - M, 20, { align: 'right' });
   y = 38; doc.setTextColor(...INK);
 
   heading('Cliente');
   kv([['Cliente', c.nome], ['Fazenda', c.fazenda], ['CPF / CNPJ', maskDoc(c.documento)], ['Localização', c.local]]);
   heading('Máquina e serviço');
-  kv([['Máquina', m ? `${m.tipo} ${m.marca} ${m.modelo}`.trim() : ''], ['Nº de série / chassi', m?.serie], ['Ano', m?.ano], ['Horímetro', a.horimetro ? `${a.horimetro} h` : ''], ['Tipo de serviço', tipoTxt(a.tipo)], ['Data', fmtDate(a.data)]]);
+  kv([['Máquina', m ? `${m.tipo} ${m.marca} ${m.modelo}`.trim() : ''], ['Nº de série / chassi', m?.serie], ['Ano', m?.ano], ['Horímetro', a.horimetro ? `${a.horimetro} h` : ''], ['Tipo de serviço', tipoTxt(a.tipo)], ['Data', periodoOS(a)]]);
   const rodape = () => {
     const pages = doc.getNumberOfPages();
     for (let i = 1; i <= pages; i++) {
