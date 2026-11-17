@@ -346,6 +346,19 @@ body.apdock-on .toast{bottom:calc(var(--nav-h) + 160px + env(safe-area-inset-bot
 header.top .brand{flex:1}
 .sheet header .navl + h3{flex:1;text-align:center}
 .navpop-bg{position:fixed;inset:0;z-index:34}
+.cal{background:var(--surface);border-radius:12px;padding:6px 8px 10px;touch-action:pan-y}
+.cal-top{display:flex;align-items:center;gap:4px}
+.cal-top b{flex:1;text-align:center;font-weight:600}
+.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;margin-top:2px}
+.cal-wd{text-align:center;font-size:12px;font-weight:600;color:var(--muted);padding:4px 0}
+button.cal-d{display:flex;flex-direction:column;align-items:center;gap:4px;border:0;border-radius:10px;background:transparent;padding:8px 0 6px;min-height:50px;min-width:0;font:500 15px var(--body);color:var(--ink)}
+button.cal-d.hoje .cal-n{color:var(--accent);font-weight:700}
+button.cal-d[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+button.cal-d[aria-pressed="true"].hoje .cal-n{color:var(--bg)}
+.cal-dots{display:flex;gap:3px;height:6px}
+.cal-dots i{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.cal-dots i.ok{background:var(--muted)}
+.ag-dia{font-weight:600}
 .navpop{position:fixed;z-index:35;width:240px;max-width:calc(100vw - 16px);max-height:calc(100vh - 72px);overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 28px rgba(0,0,0,.18);padding:6px;display:flex;flex-direction:column}
 .navpop button{display:block;width:100%;text-align:left;border:0;border-radius:8px;background:transparent;padding:10px 12px;min-height:44px;font:500 16px var(--body);color:var(--ink)}
 .navpop button:hover{background:var(--bg)}
@@ -409,6 +422,11 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
   </div></section>
 
   <!-- Agenda -->
+  <section id="v-agenda" class="view" hidden><div class="wrap">
+    <div class="spread"><h2>Agenda</h2><button type="button" class="chip" id="agHoje">Hoje</button></div>
+    <div class="cal" id="agCal"></div>
+    <div class="list" id="agDia"></div>
+  </div></section>
 
   <!-- Clientes -->
   <section id="v-clientes" class="view" hidden><div class="wrap">
@@ -603,6 +621,7 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
 <div class="navpop-bg" id="navPopBg" hidden></div>
 <div class="navpop" id="navPop" hidden>
   <button type="button" data-ir="os">Ordens de serviço</button>
+  <button type="button" data-ir="agenda">Agenda</button>
   <button type="button" data-ir="clientes">Clientes e máquinas</button>
   <button type="button" data-ir="materiais">Materiais e estoque</button>
   <div class="navpop-h">Gestão</div>
@@ -914,8 +933,9 @@ document.querySelectorAll('nav.tabs button').forEach(b => b.addEventListener('cl
 function show(id) {
   document.querySelectorAll('.view').forEach(v => v.hidden = v.id !== id);
   document.querySelectorAll('nav.tabs button').forEach(b => b.dataset.view === id ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
-  $('#fab').hidden = id !== 'v-atend';
+  $('#fab').hidden = id !== 'v-atend' && id !== 'v-agenda';
   $('#navBack').hidden = id === 'v-atend';
+  if (id === 'v-agenda') renderAgenda();
   if (id === 'v-ajustes') showAj('');
   window.scrollTo(0, 0);
 }
@@ -947,6 +967,7 @@ function ondeEstou() {
   if (!$('#svcSheet').hidden || !$('#cliSheet').hidden) return '';
   const v = document.querySelector('.view:not([hidden])')?.id;
   if (v === 'v-clientes') return 'clientes';
+  if (v === 'v-agenda') return 'agenda';
   if (v === 'v-ajustes') return document.querySelector('.ajpanel[data-aj="materiais"]:not([hidden])') ? 'materiais' : 'ajustes';
   return 'os';
 }
@@ -976,7 +997,7 @@ async function irPara(dest) {
   if (dest.startsWith('g:')) return G?.abrir(dest.slice(2));
   G?.fechar();
   if (dest === 'materiais') { show('v-ajustes'); showAj('materiais'); }
-  else show({ os: 'v-atend', clientes: 'v-clientes', ajustes: 'v-ajustes' }[dest] || 'v-atend');
+  else show({ os: 'v-atend', agenda: 'v-agenda', clientes: 'v-clientes', ajustes: 'v-ajustes' }[dest] || 'v-atend');
 }
 document.addEventListener('click', e => { const b = e.target.closest?.('[data-menu]'); if (b) navPop.hidden ? abrirMenu(b) : fecharMenu(); });
 navPopBg.addEventListener('click', fecharMenu);
@@ -1033,6 +1054,67 @@ function svcCard(a, busca) {
         : (a.problema || a.descricao) && el('div', { class: 'small muted', style: 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }, a.problema || a.descricao));
 }
 
+/* ---------- Agenda ----------
+   Calendário do mês com um ponto por OS no dia da data dela (laranja = ainda não finalizada,
+   cinza = finalizada). Tocando no dia, aparecem as OS daquele dia. */
+const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const SEMANA = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+const isoDe = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+const osFechada = a => a.status === 'concluido' || a.status === 'faturado';
+const svgDe = h => (t => (t.innerHTML = h, t.content.firstChild))(document.createElement('template'));
+let agMes = today().slice(0, 7), agDia = today();
+function osPorDia() {
+  const r = {};
+  for (const a of Object.values(atend)) if (a.data) (r[a.data] = r[a.data] || []).push(a);
+  for (const k in r) r[k].sort((x, y) => osFechada(x) - osFechada(y) || (x.numero || 0) - (y.numero || 0));
+  return r;
+}
+function agMudaMes(k) {
+  const [y, m] = agMes.split('-').map(Number), d = new Date(y, m - 1 + k, 1);
+  agMes = isoDe(d.getFullYear(), d.getMonth() + 1, 1).slice(0, 7);
+  // abre no dia de hoje, senão no primeiro dia com OS, senão no dia 1
+  const porDia = osPorDia(), t = today();
+  agDia = t.startsWith(agMes) ? t : Object.keys(porDia).filter(x => x.startsWith(agMes)).sort()[0] || agMes + '-01';
+  renderAgenda();
+}
+function renderAgenda() {
+  const cal = $('#agCal');
+  if (!cal || $('#v-agenda').hidden) return;
+  const porDia = osPorDia(), hoje = today();
+  const [y, m] = agMes.split('-').map(Number);
+  const ini = new Date(y, m - 1, 1).getDay(), dias = new Date(y, m, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < ini; i++) cells.push(el('span'));
+  for (let d = 1; d <= dias; d++) {
+    const iso = isoDe(y, m, d), os = porDia[iso] || [];
+    cells.push(el('button', { type: 'button', class: 'cal-d' + (iso === hoje ? ' hoje' : ''), 'aria-pressed': String(iso === agDia),
+        'aria-label': `${d} de ${MESES[m - 1]}` + (os.length ? `, ${os.length} OS` : ''), onclick: () => { agDia = iso; renderAgenda(); } },
+      el('span', { class: 'cal-n' }, String(d)),
+      el('span', { class: 'cal-dots' }, ...os.slice(0, 3).map(a => el('i', { class: osFechada(a) ? 'ok' : null })))));
+  }
+  cal.replaceChildren(
+    el('div', { class: 'cal-top' },
+      el('button', { type: 'button', class: 'iconbtn', 'aria-label': 'Mês anterior', onclick: () => agMudaMes(-1) }, svgDe('<svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>')),
+      el('b', {}, `${MESES[m - 1][0].toUpperCase() + MESES[m - 1].slice(1)} de ${y}`),
+      el('button', { type: 'button', class: 'iconbtn', 'aria-label': 'Próximo mês', onclick: () => agMudaMes(1) }, svgDe('<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>'))),
+    el('div', { class: 'cal-grid' }, ...['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map(t => el('span', { class: 'cal-wd', 'aria-hidden': 'true' }, t)), ...cells));
+  const [yy, mm, dd] = agDia.split('-').map(Number), sem = SEMANA[new Date(yy, mm - 1, dd).getDay()];
+  const lista = porDia[agDia] || [];
+  $('#agDia').replaceChildren(
+    el('div', { class: 'ag-dia' }, `${sem[0].toUpperCase() + sem.slice(1)}, ${dd} de ${MESES[mm - 1]}` + (yy !== +hoje.slice(0, 4) ? ` de ${yy}` : '')),
+    ...(lista.length ? lista.map(a => svcCard(a)) : [el('div', { class: 'empty' }, 'Nenhum serviço neste dia.')]));
+}
+$('#agHoje').onclick = () => { agMes = today().slice(0, 7); agDia = today(); renderAgenda(); };
+// arrastar o calendário para o lado troca o mês
+(() => {
+  let x0 = null, y0 = 0;
+  $('#agCal').addEventListener('touchstart', e => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+  $('#agCal').addEventListener('touchend', e => {
+    if (x0 == null) return;
+    const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > 2 * Math.abs(dy)) agMudaMes(dx < 0 ? 1 : -1);
+  });
+})();
 
 /* ---------- Clientes ---------- */
 function machinesOf(cid) { return Object.values(maquinas).filter(m => m.clienteId === cid); }
@@ -1891,9 +1973,10 @@ $('#fab').onclick = () => {
   const maq = el('select', { id: 'qMaquina', disabled: true });
   const tipo = el('select', { id: 'qTipo' }, el('option', { value: '' }, tipos().length ? 'Escolha o tipo de serviço' : 'Cadastre em Ajustes'), ...tipos().map(t => el('option', { value: t }, t)));
   const falha = el('textarea', { id: 'qFalha', rows: 3, placeholder: 'Ex.: Trator perdendo força em carga' });
+  const dataOS = el('input', { id: 'qData', type: 'date', value: !$('#v-agenda').hidden ? agDia : today() });
   const garInfo = el('div', { class: 'orcst warn small', hidden: true });
-  const fillGar = () => { const g = emGarantia(maq.value, today()); garInfo.hidden = !g; garInfo.textContent = g ? garantiaTxt(g) : ''; };
-  maq.addEventListener('change', fillGar);
+  const fillGar = () => { const d = dataOS.value || today(), g = emGarantia(maq.value, d); garInfo.hidden = !g; garInfo.textContent = g ? garantiaTxt(g, d) : ''; };
+  maq.addEventListener('change', fillGar); dataOS.addEventListener('change', fillGar);
   const fillMaq = () => {
     const ms = machinesOf(cid);
     maq.replaceChildren(el('option', { value: '' }, !cid ? 'Escolha o cliente primeiro' : ms.length ? 'Escolha a máquina' : 'Nenhuma máquina cadastrada'),
@@ -1930,6 +2013,7 @@ $('#fab').onclick = () => {
       el('label', { class: 'f', for: 'qBusca' }, 'Cliente', busca), sel, res,
       el('label', { class: 'f', for: 'qMaquina' }, 'Máquina', maq), garInfo,
       el('label', { class: 'f', for: 'qTipo' }, 'Tipo de serviço', tipo),
+      el('label', { class: 'f', for: 'qData' }, 'Data', dataOS),
       el('label', { class: 'f', for: 'qFalha' }, 'Falha', falha),
       el('div', { class: 'row', style: 'justify-content:flex-end' },
         el('button', { type: 'button', class: 'ghost', onclick: close }, 'Cancelar'),
@@ -1938,7 +2022,7 @@ $('#fab').onclick = () => {
           if (!maq.disabled && !maq.value) return toast('Escolha a máquina');
           if (tipos().length && !tipo.value) return toast('Escolha o tipo de serviço');
           if (!falha.value.trim()) return toast('Descreva a falha');
-          close(); openSvc(null, { clienteId: cid, maquinaId: maq.value || '', tipo: tipo.value, problema: falha.value.trim() });
+          close(); openSvc(null, { clienteId: cid, maquinaId: maq.value || '', tipo: tipo.value, problema: falha.value.trim(), data: dataOS.value || today() });
           svcAuto.kick(); await svcAuto.flush();
         } }, 'Criar OS'))));
   document.body.append(ov); requestAnimationFrame(() => busca.focus());
@@ -2623,7 +2707,7 @@ function renderLixeira() {
 window.CS = { $, el, brl, n, fmtDate, today, newId, store, calc, saveFile, toast, tipoTxt, tipos, cliLabel, osLabel, maskDoc, STATUS, uploadImg, shrink, imgOf, blobOf, pickers, renderSync, openSvc,
   saldos, acabando, matQ, shareTxt,
   get data() { return { clientes, maquinas, atend, faturas, gastos, aportes, materiais, estoque, cfg }; } };
-function rerender() { renderAtend(); renderClients(); renderMatCfg(); renderEstBanner(); renderLixeira(); avisarRespostas(); $('#ajSum-clientes').textContent = Object.keys(clientes).length + ' cliente(s)'; }
+function rerender() { renderAtend(); renderAgenda(); renderClients(); renderMatCfg(); renderEstBanner(); renderLixeira(); avisarRespostas(); $('#ajSum-clientes').textContent = Object.keys(clientes).length + ' cliente(s)'; }
 
 /* ---------- Conexão com o armazenamento ---------- */
 if (LS.get('cs-cache', null)) { loaded = { c: true, m: true, a: true }; }
