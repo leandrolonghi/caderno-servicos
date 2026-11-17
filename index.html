@@ -321,7 +321,6 @@ header.top h1{overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-w
 .ajitem .chev{width:18px;height:18px;flex:none;fill:none;stroke:var(--muted);stroke-width:2}
 .ajpanel{display:flex;flex-direction:column;gap:12px}
 .ajpanel[hidden]{display:none}
-.ajback{align-self:flex-start;padding-inline:0}
 .sigopen{width:100%;min-height:52px}
 body.noscroll{overflow:hidden}
 .sigfull{position:fixed;inset:0;z-index:100;background:#fff;color:#111;display:flex;flex-direction:column;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
@@ -343,12 +342,21 @@ body.noscroll{overflow:hidden}
 fieldset[data-tab="tempo"]{padding-bottom:150px}
 body.apdock-on .toast{bottom:calc(var(--nav-h) + 160px + env(safe-area-inset-bottom,0px))}
 .hdr-right{display:flex;align-items:center;gap:6px;flex:none}
+.navl{display:flex;align-items:center;gap:2px;flex:none;margin-left:-8px}
+header.top .brand{flex:1}
+.sheet header .navl + h3{flex:1;text-align:center}
+.navpop-bg{position:fixed;inset:0;z-index:34}
+.navpop{position:fixed;z-index:35;width:240px;max-width:calc(100vw - 16px);max-height:calc(100vh - 72px);overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 28px rgba(0,0,0,.18);padding:6px;display:flex;flex-direction:column}
+.navpop button{display:block;width:100%;text-align:left;border:0;border-radius:8px;background:transparent;padding:10px 12px;min-height:44px;font:500 16px var(--body);color:var(--ink)}
+.navpop button:hover{background:var(--bg)}
+.navpop button[aria-current="page"]{color:var(--accent);font-weight:600}
+.navpop-h{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding:10px 12px 2px;border-top:1px solid var(--line);margin-top:4px}
+.navpop hr{border:0;border-top:1px solid var(--line);margin:4px 0}
 .iconbtn{border:0;background:transparent;min-height:40px;min-width:40px;padding:8px;border-radius:10px;display:grid;place-items:center;color:var(--ink)}
 .iconbtn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
 main{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
 .fab{bottom:calc(20px + env(safe-area-inset-bottom,0px))}
 .toast{bottom:calc(88px + env(safe-area-inset-bottom,0px))}
-#v-clientes .ajback{margin-bottom:4px}
 .qdlg{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))}
 @media (min-width:640px){.qdlg{align-items:center}}
 .qdlg-box{background:var(--surface);color:var(--ink);border-radius:16px;padding:18px;width:100%;max-width:480px;display:flex;flex-direction:column;gap:12px}
@@ -388,7 +396,7 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
 .apmot{display:block;font-family:var(--body);font-size:12px;font-weight:400}
 </style>
 
-<header class="top"><div class="wrap"><div class="brand"><img class="brandlogo" id="brandLogo" alt=""><div style="min-width:0;display:flex;flex-direction:column"><h1 id="companyName">Longhi Soluções Agrícolas</h1><span class="sub">Controle de OS</span></div></div><div class="hdr-right"><span class="sync" id="syncState" data-state="ok" role="status">Tudo enviado</span><button type="button" class="iconbtn" id="btnGestao" aria-label="Gestão"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></button><button type="button" class="iconbtn" id="btnCfg" aria-label="Ajustes"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button></div></div></header>
+<header class="top"><div class="wrap"><div class="navl"><button type="button" class="iconbtn" id="navBack" aria-label="Voltar" hidden><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button><button type="button" class="iconbtn" data-menu aria-label="Menu" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button></div><div class="brand"><img class="brandlogo" id="brandLogo" alt=""><div style="min-width:0;display:flex;flex-direction:column"><h1 id="companyName">Longhi Soluções Agrícolas</h1><span class="sub">Controle de OS</span></div></div><div class="hdr-right"><span class="sync" id="syncState" data-state="ok" role="status">Tudo enviado</span></div></div></header>
 
 <main>
   <!-- Atendimentos -->
@@ -404,7 +412,6 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
 
   <!-- Clientes -->
   <section id="v-clientes" class="view" hidden><div class="wrap">
-    <button type="button" class="ghost ajback" id="cliBack">‹ Ajustes</button>
     <div class="spread"><h2>Clientes e máquinas</h2><button class="primary" id="btnNewClient" type="button">+ Cliente</button></div>
     <div class="list" id="clientList"></div>
   </div></section>
@@ -414,11 +421,10 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
   <section id="v-ajustes" class="view" hidden><div class="wrap">
     <form id="cfgForm" onsubmit="return false">
     <div id="ajMenu">
-      <button type="button" class="ghost ajback" id="ajHome">‹ Início</button>
       <h2>Ajustes</h2>
       <div class="ajlist"><button type="button" class="ajitem" data-aj="clientes"><span><b>Clientes e máquinas</b><span class="small muted" id="ajSum-clientes"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="materiais"><span><b>Materiais e estoque</b><span class="small muted" id="ajSum-materiais"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="tipos"><span><b>Tipos de serviço</b><span class="small muted" id="ajSum-tipos"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="categorias"><span><b>Categorias de falha</b><span class="small muted" id="ajSum-categorias"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="empresa"><span><b>Empresa</b><span class="small muted" id="ajSum-empresa"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="valores"><span><b>Valores</b><span class="small muted" id="ajSum-valores"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="motivos"><span><b>Motivos de pausa</b><span class="small muted" id="ajSum-motivos"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="checklist"><span><b>Checklist</b><span class="small muted" id="ajSum-checklist"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="conta"><span><b>Conta</b><span class="small muted" id="ajSum-conta"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="backup"><span><b>Cópia dos dados</b><span class="small muted" id="ajSum-backup"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ajitem" data-aj="lixeira"><span><b>Excluídos</b><span class="small muted" id="ajSum-lixeira"></span></span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button></div>
     </div>
-    <div class="ajpanel" data-aj="empresa" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Empresa</h2>
+    <div class="ajpanel" data-aj="empresa" hidden><h2>Empresa</h2>
       <label class="f" for="cfgNome">Nome da empresa<input id="cfgNome"></label>
       <label class="f" for="cfgRazao">Razão social<input id="cfgRazao"></label>
       <label class="f" for="cfgCnpj">CNPJ<input id="cfgCnpj" inputmode="numeric"></label>
@@ -429,40 +435,40 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
       <label class="f" for="cfgEnd">Endereço / cidade<input id="cfgEnd"></label>
       <span class="savestate small cfgSaved"></span>
     </div>
-    <div class="ajpanel" data-aj="valores" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Valores</h2>
+    <div class="ajpanel" data-aj="valores" hidden><h2>Valores</h2>
       <label class="f" for="cfgHora">Valor da hora técnica (R$)<input id="cfgHora" type="number" inputmode="decimal" step="0.01" min="0"></label>
       <label class="f" for="cfgKm">Valor por km rodado (R$)<input id="cfgKm" type="number" inputmode="decimal" step="0.01" min="0"></label>
       <label class="f" for="cfgGarantia">Garantia dos serviços (dias)<input id="cfgGarantia" type="number" inputmode="numeric" step="1" min="0" placeholder="90"></label>
       <span class="savestate small cfgSaved"></span>
     </div>
-    <div class="ajpanel" data-aj="materiais" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Materiais e estoque</h2>
+    <div class="ajpanel" data-aj="materiais" hidden><h2>Materiais e estoque</h2>
       <div id="matBox" style="display:flex;flex-direction:column;gap:12px"></div>
     </div>
-    <div class="ajpanel" data-aj="tipos" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Tipos de serviço</h2>
+    <div class="ajpanel" data-aj="tipos" hidden><h2>Tipos de serviço</h2>
       <div class="list" id="tiposList"></div>
       <div class="row"><input id="tipoNew" placeholder="Novo tipo" style="flex:1;min-width:180px"><button type="button" id="btnTipoAdd">+ Tipo</button></div>
     </div>
-    <div class="ajpanel" data-aj="categorias" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Categorias de falha</h2>
+    <div class="ajpanel" data-aj="categorias" hidden><h2>Categorias de falha</h2>
       <div class="list" id="catList"></div>
       <div class="row"><input id="catNew" placeholder="Nova categoria" style="flex:1;min-width:180px"><button type="button" id="btnCatAdd">+ Categoria</button></div>
     </div>
-    <div class="ajpanel" data-aj="motivos" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Motivos de pausa</h2>
+    <div class="ajpanel" data-aj="motivos" hidden><h2>Motivos de pausa</h2>
       <p class="small muted" style="margin:0">Aparecem como opções quando você pausa o atendimento.</p>
       <div class="list" id="motivosList"></div>
       <div class="row"><input id="motivoNew" placeholder="Novo motivo, ex.: Abastecimento" style="flex:1;min-width:180px"><button type="button" id="btnMotivoAdd">+ Motivo</button></div>
     </div>
-    <div class="ajpanel" data-aj="checklist" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Checklist</h2>
+    <div class="ajpanel" data-aj="checklist" hidden><h2>Checklist</h2>
       <div id="chkCfgBox" style="display:flex;flex-direction:column;gap:12px"></div>
     </div>
-    <div class="ajpanel" data-aj="conta" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Conta</h2>
+    <div class="ajpanel" data-aj="conta" hidden><h2>Conta</h2>
       <p style="margin:0" id="contaEmail"></p>
       <div class="row"><button type="button" class="danger" id="btnSair">Sair da conta</button></div>
     </div>
-    <div class="ajpanel" data-aj="lixeira" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Excluídos</h2>
+    <div class="ajpanel" data-aj="lixeira" hidden><h2>Excluídos</h2>
       <p class="small muted" style="margin:0">Ficam guardados por 90 dias.</p>
       <div class="list" id="lixList"></div>
     </div>
-    <div class="ajpanel" data-aj="backup" hidden><button type="button" class="ghost ajback">‹ Ajustes</button><h2>Cópia dos dados</h2>
+    <div class="ajpanel" data-aj="backup" hidden><h2>Cópia dos dados</h2>
       <p class="small muted" style="margin:0">Baixe uma planilha com todos os atendimentos ou uma cópia completa para guardar.</p>
       <div class="row"><button type="button" id="btnCsv">Baixar planilha</button><button type="button" id="btnJson">Baixar cópia completa</button></div>
     </div>
@@ -476,7 +482,7 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
 <!-- Ficha de atendimento -->
 <div class="sheet" id="svcSheet" hidden>
   <form id="svcForm" novalidate>
-    <header><div class="wrap"><button type="button" class="ghost" data-close>Voltar</button><h3 id="svcTitle">Novo atendimento</h3><span class="savestate" id="svcSaved"></span></div></header>
+    <header><div class="wrap"><div class="navl"><button type="button" class="iconbtn" data-close aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button><button type="button" class="iconbtn" data-menu aria-label="Menu" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button></div><h3 id="svcTitle">Novo atendimento</h3><span class="savestate" id="svcSaved"></span></div></header>
     <div class="wrap">
       <fieldset data-tab="geral"><legend>Cliente e máquina</legend>
         <label class="f" for="sCliente">Cliente<select id="sCliente" required></select></label>
@@ -554,7 +560,7 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
 <!-- Ficha de cliente -->
 <div class="sheet" id="cliSheet" hidden>
   <form id="cliForm" novalidate>
-    <header><div class="wrap"><button type="button" class="ghost" data-close>Voltar</button><h3 id="cliTitle">Novo cliente</h3><span class="savestate" id="cliSaved"></span></div></header>
+    <header><div class="wrap"><div class="navl"><button type="button" class="iconbtn" data-close aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button><button type="button" class="iconbtn" data-menu aria-label="Menu" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button></div><h3 id="cliTitle">Novo cliente</h3><span class="savestate" id="cliSaved"></span></div></header>
     <div class="wrap">
       <fieldset><legend>Dados do cliente</legend>
         <div class="grid2 gcod">
@@ -592,6 +598,22 @@ input.bad{border-color:var(--bad)!important;color:var(--bad)}
   </div></form>
 </div>
 <div class="toast" id="toast" hidden></div>
+
+<!-- Menu do canto superior esquerdo -->
+<div class="navpop-bg" id="navPopBg" hidden></div>
+<div class="navpop" id="navPop" hidden>
+  <button type="button" data-ir="os">Ordens de serviço</button>
+  <button type="button" data-ir="clientes">Clientes e máquinas</button>
+  <button type="button" data-ir="materiais">Materiais e estoque</button>
+  <div class="navpop-h">Gestão</div>
+  <button type="button" data-ir="g:painel">Painel</button>
+  <button type="button" data-ir="g:relatorios">Relatórios</button>
+  <button type="button" data-ir="g:faturas">Faturas</button>
+  <button type="button" data-ir="g:gastos">Gastos</button>
+  <button type="button" data-ir="g:aportes">Aportes</button>
+  <hr>
+  <button type="button" data-ir="ajustes">Ajustes</button>
+</div>
 
 <script src="config.js"></script>
 <script src="vendor/supabase.js"></script>
@@ -893,6 +915,7 @@ function show(id) {
   document.querySelectorAll('.view').forEach(v => v.hidden = v.id !== id);
   document.querySelectorAll('nav.tabs button').forEach(b => b.dataset.view === id ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
   $('#fab').hidden = id !== 'v-atend';
+  $('#navBack').hidden = id === 'v-atend';
   if (id === 'v-ajustes') showAj('');
   window.scrollTo(0, 0);
 }
@@ -908,12 +931,58 @@ function autosaver(fn, stateEl, ms = 700) {
   };
 }
 let opening = false;
-document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', async () => {
-  const sh = b.closest('.sheet');
+async function fecharSheet(sh) {
   if (sh.id === 'svcSheet') await svcAuto.flush();
   if (sh.id === 'cliSheet') await cliAuto.flush();
   sh.hidden = true;
-}));
+}
+document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => fecharSheet(b.closest('.sheet'))));
+
+/* Menu do canto superior esquerdo (o mesmo em todas as telas) */
+const navPop = $('#navPop'), navPopBg = $('#navPopBg');
+let navBtn = null;
+function ondeEstou() {
+  const G = window.CS?.gestao;
+  if (G?.aberta()) return 'g:' + G.aba();
+  if (!$('#svcSheet').hidden || !$('#cliSheet').hidden) return '';
+  const v = document.querySelector('.view:not([hidden])')?.id;
+  if (v === 'v-clientes') return 'clientes';
+  if (v === 'v-ajustes') return document.querySelector('.ajpanel[data-aj="materiais"]:not([hidden])') ? 'materiais' : 'ajustes';
+  return 'os';
+}
+function posMenu() {
+  if (navPop.hidden || !navBtn) return;
+  const r = navBtn.getBoundingClientRect();
+  navPop.style.top = Math.round(r.bottom + 4) + 'px';
+  navPop.style.left = Math.round(Math.max(8, r.left)) + 'px';
+}
+function abrirMenu(btn) {
+  const aqui = ondeEstou();
+  navPop.querySelectorAll('[data-ir]').forEach(b => b.dataset.ir === aqui ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
+  navPop.hidden = navPopBg.hidden = false;
+  navBtn = btn; btn.setAttribute('aria-expanded', 'true'); posMenu();
+  navPop.querySelector('[data-ir]').focus({ preventScroll: true });
+}
+function fecharMenu() {
+  if (navPop.hidden) return;
+  navPop.hidden = navPopBg.hidden = true;
+  navBtn?.setAttribute('aria-expanded', 'false'); navBtn = null;
+}
+async function irPara(dest) {
+  fecharMenu();
+  for (const id of ['cliSheet', 'svcSheet']) if (!$('#' + id).hidden) await fecharSheet($('#' + id));
+  await cfgAuto.flush();
+  const G = window.CS?.gestao;
+  if (dest.startsWith('g:')) return G?.abrir(dest.slice(2));
+  G?.fechar();
+  if (dest === 'materiais') { show('v-ajustes'); showAj('materiais'); }
+  else show({ os: 'v-atend', clientes: 'v-clientes', ajustes: 'v-ajustes' }[dest] || 'v-atend');
+}
+document.addEventListener('click', e => { const b = e.target.closest?.('[data-menu]'); if (b) navPop.hidden ? abrirMenu(b) : fecharMenu(); });
+navPopBg.addEventListener('click', fecharMenu);
+navPop.addEventListener('click', e => { const b = e.target.closest('[data-ir]'); if (b) irPara(b.dataset.ir); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !navPop.hidden) { const b = navBtn; fecharMenu(); b?.focus(); } });
+addEventListener('resize', posMenu);
 
 /* ---------- Lista de atendimentos ---------- */
 /* Busca nas OS: cada palavra digitada precisa aparecer em algum campo (sem acento, sem maiúscula) */
@@ -2282,7 +2351,6 @@ function renderChkCfg() {
       el('div', { class: 'row' }, novo, el('button', { type: 'button', onclick: add }, rotulo))];
   };
   const nomeCampo = (rot, atual, mudarNome) => el('label', { class: 'f' }, rot, el('input', { value: atual, onchange: e => { const v = e.target.value.trim(); if (!v) { e.target.value = atual; return; } mudarNome(v); } }));
-  const voltar = (txt, fn) => el('button', { type: 'button', class: 'ghost ajback', onclick: () => { fn(); renderChkCfg(); } }, '‹ ' + txt);
   const g = gs.find(x => x.id === grupoCfg);
   if (!g) {
     grupoCfg = subCfg = null;
@@ -2296,7 +2364,7 @@ function renderChkCfg() {
   const sb = g.subs.find(x => x.id === subCfg);
   if (!sb) {
     subCfg = null;
-    box.replaceChildren(voltar('Grupos', () => { grupoCfg = null; }),
+    box.replaceChildren(
       nomeCampo('Grupo principal', g.nome, v => mudarG(x => ({ ...x, nome: v }))),
       el('b', {}, 'Subgrupos'),
       ...listaNomes(g.subs, x => ' · ' + qtd(x.itens.length, 'ponto', 'pontos'), x => { subCfg = x.id; renderChkCfg(); }, 'Nenhum subgrupo ainda.',
@@ -2328,7 +2396,7 @@ function renderChkCfg() {
     focoNovo = true; mudar(x => ({ ...x, itens: [...x.itens, { item: v, foto: null }] }));
   };
   novo.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
-  box.replaceChildren(voltar(g.nome, () => { subCfg = null; }),
+  box.replaceChildren(
     nomeCampo('Subgrupo', sb.nome, v => mudar(x => ({ ...x, nome: v }))),
     el('p', { class: 'small muted', style: 'margin:0' }, 'Toque na foto para mostrar qual é o componente.'),
     lista,
@@ -2362,10 +2430,17 @@ function showAj(k) {
   window.scrollTo(0, 0);
 }
 document.querySelectorAll('.ajitem').forEach(b => b.addEventListener('click', () => b.dataset.aj === 'clientes' ? show('v-clientes') : showAj(b.dataset.aj)));
-$('#btnCfg').onclick = () => show('v-ajustes');
-$('#ajHome').onclick = () => show('v-atend');
-$('#cliBack').onclick = () => show('v-ajustes');
-document.querySelectorAll('.ajback').forEach(b => b.addEventListener('click', async () => { await cfgAuto.flush(); showAj(''); }));
+/* Voltar do topo: sobe um nível (subgrupo › grupo › Checklist, material › Materiais, painel › Ajustes › Início) */
+$('#navBack').onclick = async () => {
+  const v = document.querySelector('.view:not([hidden])')?.id;
+  if (v === 'v-clientes') return show('v-ajustes');
+  if (v !== 'v-ajustes') return show('v-atend');
+  const k = document.querySelector('.ajpanel:not([hidden])')?.dataset.aj;
+  if (!k) return show('v-atend');
+  if (k === 'checklist' && grupoCfg) { if (subCfg) subCfg = null; else grupoCfg = null; renderChkCfg(); window.scrollTo(0, 0); return; }
+  if (k === 'materiais' && matCfg) { matCfg = null; renderMatCfg(true); window.scrollTo(0, 0); return; }
+  await cfgAuto.flush(); showAj('');
+};
 
 /* ---------- Materiais e estoque ----------
    Estoque de cada material = entradas e correções lançadas aqui − o que foi usado nas OS.
@@ -2511,7 +2586,6 @@ function renderMatCfg(force) {
   };
   matUI = { id: m.id, upd };
   box.replaceChildren(
-    el('button', { type: 'button', class: 'ghost ajback', onclick: () => { matCfg = null; renderMatCfg(true); window.scrollTo(0, 0); } }, '‹ Materiais'),
     el('label', { class: 'f', for: 'matNome' }, 'Nome', nome),
     el('div', { class: 'grid2' }, el('label', { class: 'f', for: 'matUn' }, 'Unidade', un), el('label', { class: 'f', for: 'matMin' }, 'Avisar quando chegar em', minimo)),
     el('div', { class: 'grid2' }, el('label', { class: 'f', for: 'matCusto' }, 'Custo (R$)', custo), el('label', { class: 'f', for: 'matPreco' }, 'Preço de venda (R$)', preco)),
@@ -2652,7 +2726,7 @@ nav.gnav .wrap{grid-template-columns:repeat(5,1fr)}
 </style>
 
 <div class="sheet" id="gSheet" hidden>
-  <header><div class="wrap"><button type="button" class="ghost" id="gClose">‹ Início</button><h3 id="gTitle">Gestão</h3><span class="savestate" id="gSaved"></span></div></header>
+  <header><div class="wrap"><div class="navl"><button type="button" class="iconbtn" id="gClose" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button><button type="button" class="iconbtn" data-menu aria-label="Menu" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button></div><h3 id="gTitle">Gestão</h3><span class="savestate" id="gSaved"></span></div></header>
   <div class="gmain"><div class="wrap" id="gBody"></div></div>
   <nav class="ostabs gnav" aria-label="Gestão"><div class="wrap">
     <button type="button" data-gtab="painel"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Painel</button>
@@ -2755,9 +2829,14 @@ const osDone = () => Object.values(D().atend).filter(a => done(a) && inR(a.data)
 /* ---------- Navegação ---------- */
 let tab = 'painel', sub = null;
 function open(t = tab, s = null) { sairGasto(); tab = t; sub = s; $('#gSheet').hidden = false; document.body.classList.add('noscroll'); render(); $('#gSheet').scrollTop = 0; }
-$('#btnGestao').onclick = () => open('painel');
 $('#gClose').onclick = () => { sairGasto(); if (sub) { sub = null; render(); $('#gSheet').scrollTop = 0; } else { $('#gSheet').hidden = true; document.body.classList.remove('noscroll'); } };
 document.querySelectorAll('[data-gtab]').forEach(b => b.addEventListener('click', () => open(b.dataset.gtab)));
+CS.gestao = {
+  abrir: t => open(t),
+  fechar: () => { if ($('#gSheet').hidden) return; sairGasto(); sub = null; $('#gSheet').hidden = true; document.body.classList.remove('noscroll'); },
+  aberta: () => !$('#gSheet').hidden,
+  aba: () => tab
+};
 document.addEventListener('cs:dados', () => {
   if ($('#gSheet').hidden) return;
   const ae = document.activeElement;
@@ -2767,7 +2846,6 @@ document.addEventListener('cs:dados', () => {
 const TITLES = { painel: 'Painel', relatorios: 'Relatórios', faturas: 'Faturas', gastos: 'Gastos', aportes: 'Aportes' };
 function render() {
   document.querySelectorAll('[data-gtab]').forEach(b => b.dataset.gtab === tab ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
-  $('#gClose').textContent = sub ? '‹ Voltar' : '‹ Caderno';
   $('#gSaved').textContent = '';
   const body = $('#gBody'); body.replaceChildren();
   $('#gTitle').textContent = TITLES[tab];
