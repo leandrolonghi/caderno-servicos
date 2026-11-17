@@ -367,6 +367,8 @@ main{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
 .qsel b{font-weight:600}
 .gcod{grid-template-columns:1fr 110px}
 .qdlg-box{max-height:calc(100dvh - 32px);overflow:auto}
+/* com o teclado aberto a janela rola em vez de espremer a lista de clientes */
+.qdlg-box>*{flex-shrink:0}
 .camico{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linejoin:round;flex:none}
 .addphoto{gap:4px;flex-direction:column}
 .pill.st-aberto{color:var(--muted)}
@@ -872,12 +874,18 @@ function calc(a) {
 }
 
 /* ---------- Teclado: tocar fora do campo fecha ---------- */
+// Nos botões das janelas (Nova OS, login…) o teclado só fecha depois do toque: se fechasse com o dedo
+// ainda na tela, a janela descia e o toque caía em outro lugar (ex.: no fundo escuro, que fecha a janela).
+let toqueIni = null;
 document.addEventListener('pointerdown', e => {
+  toqueIni = e.target;
   const ae = document.activeElement;
   if (!ae || !ae.matches('input, textarea, select, [contenteditable]')) return;
-  if (e.target.closest('input, textarea, select, label, [contenteditable]')) return;
+  if (e.target.closest('input, textarea, select, label, [contenteditable], .qdlg-box button')) return;
   ae.blur();
 }, true);
+// a janela só fecha tocando no fundo escuro se o toque também começou no fundo
+document.addEventListener('click', e => { if (e.target.classList?.contains('qdlg') && toqueIni !== e.target) e.stopPropagation(); }, true);
 
 /* ---------- Navegação ---------- */
 document.querySelectorAll('nav.tabs button').forEach(b => b.addEventListener('click', () => show(b.dataset.view)));
